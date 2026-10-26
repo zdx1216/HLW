@@ -8,7 +8,6 @@ from langchain_openai import ChatOpenAI
 from hlw.core.config import settings
 from hlw.tools.project_tools import get_project_status
 
-
 SYSTEM_PROMPT = """
 你是 Hermes Local Workbench（HLW）的核心 AI 助手。
 当前项目处于 P0-01 工程初始化阶段。

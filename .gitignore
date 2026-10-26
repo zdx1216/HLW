@@ -25,3 +25,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 .idea/
+
+# LangGraph local API cache
+.langgraph_api/
