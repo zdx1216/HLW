@@ -1,0 +1,29 @@
+[project]
+name = "hlw"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "zdx", email = "zdongxu333@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "deepagents>=0.7.32",
+    "langchain-openai>=1.7.2",
+    "pydantic>=2.14.1",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+hlw = "hlw:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "langgraph-cli[inmem]>=0.4.38",
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]
