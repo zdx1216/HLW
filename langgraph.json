@@ -1,7 +1,12 @@
+
 {
   "dependencies": ["."],
   "graphs": {
-    "hlw_core": "./src/hlw/agent/graph.py:graph"
+    "hlw_core": "./src/hlw/agent/graph.py:graph",
+    "hlw_fallback_probe": "./scripts/check_model_fallback.py:graph"
   },
-  "env": ".env"
+  "env": ".env",
+  "checkpointer": {
+    "path": "./src/hlw/memory/checkpoints_postgres.py:open_postgres_checkpointer"
+  }
 }

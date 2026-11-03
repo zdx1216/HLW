@@ -28,3 +28,15 @@ Thumbs.db
 
 # LangGraph local API cache
 .langgraph_api/
+
+# Local runtime data (PostgreSQL data directory, bind-mounted by compose)
+data/
+
+# Runtime logs (written by hlw.core.logging_config, bind-mounted by compose)
+logs/
+
+# Local agent workspace (keep the folders, ignore their contents)
+workspace/input/*
+workspace/output/*
+!workspace/input/.gitkeep
+!workspace/output/.gitkeep

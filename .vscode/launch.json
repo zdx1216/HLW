@@ -1,0 +1,83 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "调试：当前测试文件 (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "${file}",
+        "-s",
+        "--no-header",
+        "-q"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "justMyCode": false
+    },
+    {
+      "name": "调试：全部单元测试 (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "tests/unit",
+        "-s",
+        "--no-header",
+        "-q"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "justMyCode": false
+    },
+    {
+      "name": "调试：当前测试文件 -k 过滤",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "${file}",
+        "-s",
+        "-k",
+        "${input:testName}",
+        "--no-header",
+        "-q"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "justMyCode": false
+    },
+    {
+      "name": "调试：当前 Python 文件",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "justMyCode": false
+    },
+    {
+      "name": "调试：check_controlled_fallback.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/check_controlled_fallback.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "justMyCode": false
+    }
+  ],
+  "inputs": [
+    {
+      "id": "testName",
+      "type": "promptString",
+      "description": "输入 -k 过滤用的测试名（如 primary_success_event）",
+      "default": "test_primary_success_event"
+    }
+  ]
+}

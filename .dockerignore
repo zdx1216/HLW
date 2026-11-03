@@ -1,0 +1,34 @@
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Development tools
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Git
+.git/
+.gitignore
+
+# Sensitive configuration
+.env
+.env.*
+
+# Local data and logs
+data/
+logs/
+*.log
+
+# Tests
+tests/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

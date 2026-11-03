@@ -1,0 +1,149 @@
+# ============================================================
+# HLW 应用的 Docker Compose 编排文件
+#
+# 启动：  docker compose up -d        （后台启动 postgres + api 两个容器）
+# 查看：  docker compose logs -f api  （跟踪 api 日志）
+# 停止：  docker compose down         （停掉并删除容器，数据卷保留）
+#
+# 两个服务的关系：api 依赖 postgres（等它健康后才启动），
+# postgres 保存 Agent 对话状态（LangGraph Checkpointer 表）。
+# ============================================================
+
+# 项目名称：作为容器/网络/卷的名字前缀（如 hlw-api-1、hlw-postgres-1）。
+# 不写的话默认取所在目录名。
+name: hlw
+
+services:
+
+  # ------------------------------------------------------------
+  # 服务 1：PostgreSQL 数据库
+  # ------------------------------------------------------------
+  postgres:
+    # 官方 PostgreSQL 16 镜像（不写 tag 默认 latest，固定版本更可复现）
+    image: postgres:16
+
+    # 除非手动 stop，否则容器崩溃/宿主机重启后自动拉起
+    restart: unless-stopped
+
+    environment:
+      # 初始化建库建用户的三个变量（只在数据目录为空的首次启动时生效！
+      # 已有数据后再改这些值不会生效，避免误以为改了就换了账号）。
+      # ${HLW_DB_USER:-hlw}  的含义：优先取宿主机 .env 里的 HLW_DB_USER，
+      # 没配则用默认值 hlw；下面的 DB_NAME 同理。
+      POSTGRES_USER: ${HLW_DB_USER:-hlw}
+      # ${HLW_DB_PASSWORD:?Set HLW_DB_PASSWORD} 的含义：必须提供！
+      # 宿主机 .env 里没写 HLW_DB_PASSWORD 时 compose 直接报错退出，
+      # 防止用空密码把库跑起来（和 checkpoints_postgres.py 的校验呼应）。
+      POSTGRES_PASSWORD: ${HLW_DB_PASSWORD:?Set HLW_DB_PASSWORD}
+      POSTGRES_DB: ${HLW_DB_NAME:-hlw}
+
+    ports:
+      # 端口映射 格式 = 宿主机:容器。只绑定 127.0.0.1（回环地址）：
+      # 只有本机能连这个库，局域网/外网访问不到，避免数据库暴露在公网上。
+      # 容器内 postgres 监听标准端口 5432。
+      - "127.0.0.1:5432:5432"
+
+    volumes:
+      # 把容器内数据库的数据目录挂载到宿主机 ./data/postgres。
+      # 这样即使删除容器（down），数据仍然留在宿主机磁盘上；
+      # 换镜像版本重建容器也不丢数据。这是"数据持久化"的关键。
+      - ./data/postgres:/var/lib/postgresql/data
+
+    healthcheck:
+      # 健康检查：用 pg_isready 探测数据库能否接受连接。
+      # $$POSTGRES_USER 是转义写法（$$ → 容器里的 $），
+      # 即用容器内的环境变量，而不是 compose 在宿主机上展开。
+      test:
+        - CMD-SHELL
+        - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
+      interval: 5s    # 每 5 秒探测一次
+      timeout: 5s     # 单次探测超过 5 秒算失败
+      retries: 10     # 连续失败 10 次才标记为 unhealthy
+      # （api 的 depends_on 会等这个检查通过才启动）
+
+  # ------------------------------------------------------------
+  # 服务 2：HLW API 应用（FastAPI + uvicorn）
+  # ------------------------------------------------------------
+  api:
+    build:
+      # 不用现成镜像，而是用本目录下的 Dockerfile 现场构建镜像
+      # （就是那个 python:3.11-slim + uv sync 的构建文件）
+      context: .
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    # init: true  让 Docker 注入一个轻量 init 进程（tini）作为 PID 1，
+    # 负责转发信号、回收僵尸进程。保证 uvicorn 能正确收到 SIGTERM 优雅退出。
+    init: true
+
+    depends_on:
+      # 依赖 postgres 服务，且不是"启动了就行"，而是
+      # condition: service_healthy —— 等 postgres 健康检查通过后才启动 api。
+      # 避免 api 抢先启动、连不上数据库而崩溃。
+      postgres:
+        condition: service_healthy
+
+    environment:
+      # 运行环境标识，读到 hlw.core.config 的 settings.environment
+      HLW_ENV: production
+
+      # ---- PostgreSQL 连接配置 ----
+      # 注意 host 是 postgres —— Compose 会用服务名做 DNS，
+      # 同一网络内容器互相用服务名访问，所以 api 连数据库不用管 IP。
+      HLW_DB_HOST: postgres
+      HLW_DB_PORT: "5432"
+      HLW_DB_NAME: ${HLW_DB_NAME:-hlw}
+      HLW_DB_USER: ${HLW_DB_USER:-hlw}
+      # 同样是必填校验（:?），与 postgres 服务用同一个密码，保证两边一致
+      HLW_DB_PASSWORD: ${HLW_DB_PASSWORD:?Set HLW_DB_PASSWORD}
+
+      # ---- 模型服务（Ollama）----
+      # Ollama 装在 Windows 宿主机上，不在容器里。
+      # host.docker.internal 是 Docker 提供的特殊域名，指向宿主机；
+      # 下面 extra_hosts 负责把它解析到宿主机网关（Linux 上必须显式映射）。
+      HLW_OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
+
+      # ---- 模型配置（对应 hlw.core.config 的 settings）----
+      # primary 主模型 / fallback 备用模型（重试耗尽后兜底的那个）
+      HLW_CHAT_MODEL: ${HLW_CHAT_MODEL:-qwen3:8b}
+      HLW_FALLBACK_MODEL: ${HLW_FALLBACK_MODEL:-qwen3:14b}
+      # 模型单次调用超时（秒），超时算可恢复错误，会触发重试/回退
+      HLW_MODEL_TIMEOUT_SECONDS: ${HLW_MODEL_TIMEOUT_SECONDS:-120}
+
+      # ---- 日志 ----
+      HLW_LOG_LEVEL: ${HLW_LOG_LEVEL:-INFO}
+      # Python 不缓冲输出，配合 Dockerfile 里的同名设置，
+      # 让 docker compose logs 能实时看到日志
+      PYTHONUNBUFFERED: "1"
+
+    extra_hosts:
+      # 把 host.docker.internal 映射到宿主机网关。
+      # Windows/Mac 上 Docker 自带这个域名，但加了这行后
+      # Linux 宿主机上也能用（host-gateway 是 Docker 的特殊值），
+      # 保证"容器访问宿主机 Ollama"这一条链路到处都通。
+      - "host.docker.internal:host-gateway"
+
+    ports:
+      # 只绑定 127.0.0.1：API 也只给本机访问（如需对外要改成 0.0.0.0 或加反向代理）
+      - "127.0.0.1:8000:8000"
+
+    volumes:
+      # 把容器内 /app/logs（logging_config.py 写日志的地方）
+      # 挂载到宿主机 ./logs，在 Windows 上直接用编辑器就能看日志文件，
+      # 不用 docker exec 进容器。
+      - ./logs:/app/logs
+
+    healthcheck:
+      # 用 Python 标准库请求 GET /health（api 里定义的存活接口）。
+      # 不用 curl/wget 是因为 slim 镜像里根本没装它们。
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 15s      # 每 15 秒探测一次
+      timeout: 5s        # 单次探测超过 5 秒算失败
+      retries: 5         # 连续失败 5 次标记为 unhealthy
+      start_period: 15s  # 启动宽限期：前 15 秒内探测失败不算数
+                         # （给 uvicorn + 图初始化 + 建 checkpoint 表留时间）

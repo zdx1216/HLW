@@ -29,7 +29,8 @@ class AppSettings:
     environment: str  # 运行环境标识，如 development / production
     chat_model: str  # 对话模型名称（默认走 Ollama）
     ollama_base_url: str  # Ollama 的 OpenAI 兼容接口地址
-
+    fallback_model:str 
+    model_timeout_seconds:float 
 
 def load_settings() -> AppSettings:
     """从环境变量读取配置。
@@ -48,10 +49,16 @@ def load_settings() -> AppSettings:
             "HLW_OLLAMA_BASE_URL",
             "http://127.0.0.1:11434/v1"
         ),
+        fallback_model=os.getenv("HLW_FALLBACK_MODEL", "qwen3:14b"),
+        model_timeout_seconds=float(
+    os.getenv(
+        "HLW_MODEL_TIMEOUT_SECONDS",
+        "120",
+    )
+),
     )
 
 
 # 模块级单例：其他模块可直接 ``from hlw.core.config import settings``，
 # 避免每次调用都重复读取环境变量。
 settings = load_settings()
-# print(PROJECT_ROOT)

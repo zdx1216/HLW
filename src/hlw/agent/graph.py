@@ -3,14 +3,17 @@
 
 from deepagents import create_deep_agent
 from deepagents.backends import StateBackend
-from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from hlw.core.config import settings
+from hlw.models.gateway import build_model
+from hlw.models.resilience import ControlledFallbackMiddleware
 from hlw.tools.project_tools import get_project_status
 
 SYSTEM_PROMPT = """
 你是 Hermes Local Workbench（HLW）的核心 AI 助手。
-当前项目处于 P0-01 工程初始化阶段。
+当前项目的实际版本、开发阶段和已实现功能，
+必须通过 get_project_status 获取。
+不得依据系统提示词中的静态信息推断开发进度。
 工作规则：
 1. 用户询问项目版本、开发阶段、已实现功能或规划时，
    必须调用 get_project_status 工具获取事实。
@@ -29,25 +32,36 @@ Multi-Agent、安全审批及可观测性等能力。
 """
 
 
-def create_model() -> ChatOpenAI:
-    """创建当前配置的本地 Ollama 聊天模型。"""
-
-    return ChatOpenAI(
-        model=settings.chat_model,
-        base_url=settings.ollama_base_url,
-        api_key="ollama",
-        temperature=0,
-        timeout=120,
-        max_retries=0,
-    )
-
-
-model = create_model()
-
+model = build_model("primary")
+fallback_model = build_model("fallback")
+fallback_middleware = ControlledFallbackMiddleware(
+    fallback_model = fallback_model,
+    max_retries=2
+)
 
 graph = create_deep_agent(
     model=model,
     backend=StateBackend(),
     tools=[get_project_status],
+    middleware=[fallback_middleware],
     system_prompt=SYSTEM_PROMPT,
 )
+
+def build_persistent_graph(
+    checkpointer: BaseCheckpointSaver,
+):
+    """构建使用外部 Checkpointer 的 HLW Agent Graph。"""
+
+    persistent_fallback = ControlledFallbackMiddleware(
+        fallback_model=fallback_model,
+        max_retries=2,
+    )
+
+    return create_deep_agent(
+        model=model,
+        backend=StateBackend(),
+        tools=[get_project_status],
+        middleware=[persistent_fallback],
+        system_prompt=SYSTEM_PROMPT,
+        checkpointer=checkpointer,
+    )
