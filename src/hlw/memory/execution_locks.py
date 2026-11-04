@@ -1,4 +1,3 @@
-
 """HLW 长期记忆的异步执行锁。
 
 负责：
@@ -18,12 +17,13 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
+from hlw.core.identity import normalize_user_id
+
 
 @dataclass
 class _MemoryLockEntry:
     """保存一把 Memory 锁及其使用情况。"""
 
-    # 真正负责控制并发的异步锁。
     lock: asyncio.Lock = field(
         default_factory=asyncio.Lock
     )
@@ -60,9 +60,10 @@ class MemoryExecutionLocks:
             允许并发执行。
         """
 
-        # STEP 1：检查用户 ID。
-        if not isinstance(user_id, str) or not user_id.strip():
-            raise ValueError("user_id 不能为空")
+        # STEP 1：使用全局统一规则规范化用户 ID。
+        normalized_user_id = normalize_user_id(
+            user_id
+        )
 
         # STEP 2：检查记忆 key。
         if (
@@ -71,33 +72,30 @@ class MemoryExecutionLocks:
         ):
             raise ValueError("memory_key 不能为空")
 
+        normalized_memory_key = memory_key.strip()
+
         # STEP 3：构建锁的唯一标识。
-        # 必须同时包含用户 ID 和记忆 key。
         lock_key = (
-            user_id.strip(),
-            memory_key.strip(),
+            normalized_user_id,
+            normalized_memory_key,
         )
 
         # STEP 4：查询是否已经存在对应的锁。
         entry = self._entries.get(lock_key)
 
-        # 如果不存在，就创建一把新锁。
         if entry is None:
             entry = _MemoryLockEntry()
             self._entries[lock_key] = entry
 
         # STEP 5：记录使用者数量。
-        # 等待获取锁的任务也要计入，防止锁被提前删除。
+        # 等待获取锁的任务也要计入。
         entry.users += 1
 
         try:
             # STEP 6：获取锁。
-            # 如果其他任务正在使用同一把锁，
-            # 当前任务就在这里等待。
             async with entry.lock:
 
                 # STEP 7：把锁交给调用方。
-                # 调用方可以在这里执行完整的读、判断、写操作。
                 yield
 
         finally:

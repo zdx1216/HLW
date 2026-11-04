@@ -3,6 +3,16 @@
 
 使用 InMemoryStore 替代 PostgreSQL，
 测试 MemoryManager 的核心记忆管理功能。
+
+测试范围：
+1. 记忆保存与读取
+2. 重复记忆覆盖
+3. 用户记忆隔离
+4. 记忆列表和分类筛选
+5. 记忆分页检索
+6. 记忆更新与删除
+7. 用户身份规范化
+8. 非法输入校验
 """
 
 import pytest
@@ -67,10 +77,10 @@ async def test_save_existing_memory():
         content="喜欢详细的中文注释",
     )
 
-    # 创建时间应该保留
+    # 创建时间应该保留。
     assert first["created_at"] == second["created_at"]
 
-    # 内容应该更新
+    # 内容应该更新。
     assert second["content"] == "喜欢详细的中文注释"
 
 
@@ -164,10 +174,10 @@ async def test_update_memory():
 
     assert updated["content"] == "喜欢详细的中文注释"
 
-    # 未指定修改的字段应该保持不变
+    # 未指定修改的字段应该保持不变。
     assert updated["category"] == "preference"
 
-    # 创建时间不应该改变
+    # 创建时间不应该改变。
     assert updated["created_at"] == original["created_at"]
 
 
@@ -190,7 +200,7 @@ async def test_delete_memory():
 
     assert deleted is True
 
-    # 删除后应该无法读取
+    # 删除后应该无法读取。
     result = await manager.get_memory(
         "user_001",
         "learning_style",
@@ -198,7 +208,7 @@ async def test_delete_memory():
 
     assert result is None
 
-    # 再次删除应该返回 False
+    # 再次删除应该返回 False。
     deleted_again = await manager.delete_memory(
         "user_001",
         "learning_style",
@@ -209,7 +219,7 @@ async def test_delete_memory():
 
 @pytest.mark.anyio
 async def test_invalid_memory_input():
-    """测试非法输入是否被正确拒绝。"""
+    """测试非法记忆输入是否被正确拒绝。"""
 
     manager = create_manager()
 
@@ -238,4 +248,172 @@ async def test_invalid_memory_input():
         await manager.list_memories(
             "user_001",
             limit=0,
+        )
+
+
+# =====================================================
+# 用户身份规范化测试
+# =====================================================
+
+
+@pytest.mark.anyio
+async def test_user_id_is_normalized_before_namespace():
+    """测试用户 ID 在构建命名空间前进行规范化。"""
+
+    manager = create_manager()
+
+    await manager.save_memory(
+        user_id=" user_001 ",
+        key="learning_style",
+        content="喜欢详细的中文注释",
+    )
+
+    # 规范化前后的用户 ID 应访问相同的记忆空间。
+    result = await manager.get_memory(
+        user_id="user_001",
+        key="learning_style",
+    )
+
+    assert result is not None
+    assert result["content"] == "喜欢详细的中文注释"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "invalid_user_id",
+    [
+        "../admin",
+        "-admin",
+        "local user",
+        "a" * 65,
+        "",
+        "   ",
+        None,
+        123,
+    ],
+)
+async def test_invalid_user_id_rejected(
+    invalid_user_id,
+):
+    """测试非法用户身份必须被拒绝。"""
+
+    manager = create_manager()
+
+    with pytest.raises(ValueError):
+        await manager.save_memory(
+            user_id=invalid_user_id,
+            key="test",
+            content="测试内容",
+        )
+
+
+# =====================================================
+# 分页检索测试
+# =====================================================
+
+
+@pytest.mark.anyio
+async def test_list_memories_pagination():
+    """测试记忆列表分页及类别筛选。"""
+
+    manager = create_manager()
+
+    # 创建4条 preference 记忆。
+    keys = [
+        "learning_style",
+        "coding_style",
+        "research_style",
+        "writing_style",
+    ]
+
+    for key in keys:
+        await manager.save_memory(
+            user_id="user_001",
+            key=key,
+            content=f"记忆内容：{key}",
+            category="preference",
+        )
+
+    # 再创建一条其他类别的记忆。
+    await manager.save_memory(
+        user_id="user_001",
+        key="project",
+        content="正在开发 HLW",
+        category="project",
+    )
+
+    # 获取 preference 第一页。
+    page_1 = await manager.list_memories(
+        user_id="user_001",
+        category="preference",
+        limit=2,
+        offset=0,
+    )
+
+    # 获取 preference 第二页。
+    page_2 = await manager.list_memories(
+        user_id="user_001",
+        category="preference",
+        limit=2,
+        offset=2,
+    )
+
+    keys_1 = {
+        item["key"]
+        for item in page_1
+    }
+
+    keys_2 = {
+        item["key"]
+        for item in page_2
+    }
+
+    assert len(page_1) == 2
+    assert len(page_2) == 2
+
+    # 两页不能出现重复记录。
+    assert keys_1.isdisjoint(keys_2)
+
+    # 两页合起来必须覆盖全部 preference 记忆。
+    assert keys_1 | keys_2 == set(keys)
+
+    # 第三页应该没有剩余记录。
+    page_3 = await manager.list_memories(
+        user_id="user_001",
+        category="preference",
+        limit=2,
+        offset=4,
+    )
+
+    assert page_3 == []
+
+    # project 类别不能出现在 preference 结果中。
+    assert all(
+        item["category"] == "preference"
+        for item in page_1 + page_2
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "invalid_offset",
+    [
+        -1,
+        True,
+        1.5,
+        "1",
+        None,
+    ],
+)
+async def test_list_memories_rejects_invalid_offset(
+    invalid_offset,
+):
+    """非法 offset 必须被拒绝。"""
+
+    manager = create_manager()
+
+    with pytest.raises(ValueError):
+        await manager.list_memories(
+            user_id="user_001",
+            offset=invalid_offset,
         )

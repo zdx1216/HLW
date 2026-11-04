@@ -1,11 +1,19 @@
-
 """HLW 统一长期记忆管理器。
 
-负责长期记忆的保存、读取、列表检索、更新和删除。
+负责长期记忆的：
+1. 保存
+2. 读取
+3. 列表检索
+4. 分类筛选
+5. 分页检索
+6. 更新
+7. 删除
 
-注意：
-    本模块不负责创建或关闭数据库连接。
-    Store 对象由外部注入，保证资源生命周期统一管理。
+安全要求：
+- 不同用户的记忆必须隔离。
+- user_id 必须经过统一规范化。
+- 不允许非法身份访问记忆。
+- 数据库连接由外部统一管理。
 """
 
 from datetime import UTC, datetime
@@ -13,12 +21,14 @@ from typing import Any
 
 from langgraph.store.base import BaseStore
 
+from hlw.core.identity import normalize_user_id
+
 
 class MemoryManager:
     """统一管理用户的长期记忆。"""
 
     def __init__(self, store: BaseStore) -> None:
-        """接收外部传入的 Store。
+        """通过依赖注入接收 Store。
 
         Args:
             store: LangGraph Store 实例。
@@ -33,14 +43,17 @@ class MemoryManager:
 
         不同用户拥有独立的记忆空间。
         同一用户的不同 thread_id 共用该记忆空间。
+
+        user_id 必须经过统一身份校验和规范化。
         """
 
-        if not isinstance(user_id, str) or not user_id.strip():
-            raise ValueError("user_id 不能为空")
+        normalized_user_id = normalize_user_id(
+            user_id
+        )
 
         return (
             "users",
-            user_id.strip(),
+            normalized_user_id,
             "memories",
         )
 
@@ -71,32 +84,42 @@ class MemoryManager:
         则覆盖原有内容，同时保留最初的创建时间。
         """
 
+        # STEP 1：构建并校验用户命名空间。
         namespace = self._build_namespace(user_id)
 
-        key = self._validate_text(key, "key")
-        content = self._validate_text(content, "content")
+        # STEP 2：检查输入内容。
+        key = self._validate_text(
+            key,
+            "key",
+        )
+
+        content = self._validate_text(
+            content,
+            "content",
+        )
+
         category = self._validate_text(
             category,
             "category",
         )
 
-        # 记录当前 UTC 时间
+        # STEP 3：记录当前 UTC 时间。
         now = datetime.now(UTC).isoformat()
 
-        # 检查是否已经存在相同的记忆
+        # STEP 4：检查是否已经存在相同记忆。
         existing = await self._store.aget(
             namespace,
             key,
         )
 
-        # 已存在则保留原始创建时间
+        # STEP 5：已存在则保留原始创建时间。
         created_at = (
             existing.value.get("created_at", now)
             if existing is not None
             else now
         )
 
-        # 统一记忆的数据结构
+        # STEP 6：统一记忆数据结构。
         memory = {
             "content": content,
             "category": category,
@@ -104,7 +127,7 @@ class MemoryManager:
             "updated_at": now,
         }
 
-        # 写入 PostgreSQL Store
+        # STEP 7：写入 Store。
         await self._store.aput(
             namespace,
             key,
@@ -118,11 +141,18 @@ class MemoryManager:
         user_id: str,
         key: str,
     ) -> dict[str, Any] | None:
-        """根据用户 ID 和记忆 key 获取一条记忆。"""
+        """根据用户 ID 和记忆 Key 获取一条记忆。"""
 
+        # STEP 1：构建用户命名空间。
         namespace = self._build_namespace(user_id)
-        key = self._validate_text(key, "key")
 
+        # STEP 2：检查 Key。
+        key = self._validate_text(
+            key,
+            "key",
+        )
+
+        # STEP 3：读取记忆。
         item = await self._store.aget(
             namespace,
             key,
@@ -138,22 +168,52 @@ class MemoryManager:
         user_id: str,
         category: str | None = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         """获取用户的记忆列表。
 
-        可以根据 category 筛选。
+        支持：
+        1. 根据 category 筛选记忆。
+        2. 根据 limit 限制返回数量。
+        3. 根据 offset 实现分页。
+
+        Args:
+            user_id: 用户身份。
+            category: 可选的记忆类别。
+            limit: 最大返回数量。
+            offset: 跳过的记录数量。
+
+        Returns:
+            符合条件的记忆列表。
         """
 
+        # STEP 1：构建并校验用户命名空间。
         namespace = self._build_namespace(user_id)
 
+        # STEP 2：检查 limit。
+        # 必须是大于等于 1 的整数。
+        # bool 是 int 的子类，因此需要单独排除。
         if (
             not isinstance(limit, int)
             or isinstance(limit, bool)
             or limit < 1
         ):
-            raise ValueError("limit 必须是正整数")
+            raise ValueError(
+                "limit 必须是正整数"
+            )
 
-        # 如果指定类别，则只获取该类别的记忆
+        # STEP 3：检查 offset。
+        # offset 可以为 0，但不能是负数。
+        if (
+            not isinstance(offset, int)
+            or isinstance(offset, bool)
+            or offset < 0
+        ):
+            raise ValueError(
+                "offset 必须是非负整数"
+            )
+
+        # STEP 4：构建类别筛选条件。
         filters = None
 
         if category is not None:
@@ -161,16 +221,20 @@ class MemoryManager:
                 category,
                 "category",
             )
+
             filters = {
                 "category": category,
             }
 
+        # STEP 5：执行数据库分页检索。
         items = await self._store.asearch(
             namespace,
             filter=filters,
             limit=limit,
+            offset=offset,
         )
 
+        # STEP 6：转换为统一的字典结构。
         return [
             {
                 "key": item.key,
@@ -193,13 +257,20 @@ class MemoryManager:
         只更新传入的字段，不改变其他字段。
         """
 
+        # STEP 1：构建用户命名空间。
         namespace = self._build_namespace(user_id)
-        key = self._validate_text(key, "key")
+
+        key = self._validate_text(
+            key,
+            "key",
+        )
 
         if content is None and category is None:
-            raise ValueError("至少提供一个需要更新的字段")
+            raise ValueError(
+                "至少提供一个需要更新的字段"
+            )
 
-        # 首先读取原有记忆
+        # STEP 2：读取原有记忆。
         existing = await self._store.aget(
             namespace,
             key,
@@ -208,10 +279,10 @@ class MemoryManager:
         if existing is None:
             return None
 
-        # 复制原有数据，避免丢失其他字段
+        # STEP 3：复制原有数据。
         memory = dict(existing.value)
 
-        # 只修改用户明确提供的字段
+        # STEP 4：只修改用户明确提供的字段。
         if content is not None:
             memory["content"] = self._validate_text(
                 content,
@@ -224,11 +295,12 @@ class MemoryManager:
                 "category",
             )
 
-        # 更新修改时间
+        # STEP 5：更新修改时间。
         memory["updated_at"] = (
             datetime.now(UTC).isoformat()
         )
 
+        # STEP 6：写入 Store。
         await self._store.aput(
             namespace,
             key,
@@ -248,10 +320,15 @@ class MemoryManager:
         返回 False 表示记忆原本不存在。
         """
 
+        # STEP 1：构建用户命名空间。
         namespace = self._build_namespace(user_id)
-        key = self._validate_text(key, "key")
 
-        # 先确认记忆是否存在
+        key = self._validate_text(
+            key,
+            "key",
+        )
+
+        # STEP 2：确认记忆是否存在。
         existing = await self._store.aget(
             namespace,
             key,
@@ -260,7 +337,7 @@ class MemoryManager:
         if existing is None:
             return False
 
-        # 执行删除
+        # STEP 3：执行删除。
         await self._store.adelete(
             namespace,
             key,

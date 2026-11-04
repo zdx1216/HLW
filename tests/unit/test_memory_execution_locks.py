@@ -266,3 +266,59 @@ async def test_cancelled_waiter_cleanup(
 
     # 所有任务结束后，锁对象应该被清理。
     assert memory_locks._entries == {}
+
+@pytest.mark.anyio
+async def test_user_id_is_normalized_before_lock_key(
+    memory_locks,
+):
+    """验证带首尾空格的用户 ID 使用规范化后的锁键。"""
+
+    async with memory_locks.hold(
+        " zdx ",
+        "coding_style",
+    ):
+        # 锁键应该使用规范化后的用户 ID。
+        assert (
+            "zdx",
+            "coding_style",
+        ) in memory_locks._entries
+
+        # 不应该保留带空格的原始 ID。
+        assert (
+            " zdx ",
+            "coding_style",
+        ) not in memory_locks._entries
+
+    # 退出后锁应该被清理。
+    assert memory_locks._entries == {}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "invalid_user_id",
+    [
+        "../admin",
+        "-admin",
+        "local user",
+        "a" * 65,
+        "",
+        "   ",
+        None,
+        123,
+    ],
+)
+async def test_invalid_user_id_rejected(
+    memory_locks,
+    invalid_user_id,
+):
+    """验证非法用户 ID 无法获取记忆执行锁。"""
+
+    with pytest.raises(ValueError):
+        async with memory_locks.hold(
+            invalid_user_id,
+            "coding_style",
+        ):
+            pass
+
+    # 非法 ID 不应该创建任何锁对象。
+    assert memory_locks._entries == {}
