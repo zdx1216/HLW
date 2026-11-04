@@ -1,30 +1,36 @@
 
-"""HLW Agent Service 集成逻辑测试。"""
+"""HLW Agent Service 身份传递及执行逻辑测试。"""
 
 import asyncio
 
 import pytest
 
 from hlw.agent.service import AgentService
+from hlw.core.config import settings
 from hlw.core.request_context import get_request_id
 
 
 class FakeGraph:
-    """不调用 Ollama 的测试图。"""
+    """模拟 LangGraph，不调用真实模型。"""
 
     async def ainvoke(self, inputs, config):
         await asyncio.sleep(0)
 
+        configurable = config["configurable"]
+        metadata = config["metadata"]
+
         return {
             "message": inputs["messages"][0]["content"],
-            "thread_id": config["configurable"]["thread_id"],
+            "thread_id": configurable["thread_id"],
+            "user_id": configurable["user_id"],
             "request_id": get_request_id(),
-            "metadata_id": config["metadata"]["request_id"],
+            "metadata_id": metadata["request_id"],
+            "metadata_user_id": metadata["user_id"],
         }
 
 
 def test_service_passes_context():
-    """检查请求标识和线程标识是否正确传递。"""
+    """检查用户身份、请求标识和线程标识是否正确传递。"""
 
     async def scenario():
         service = AgentService(
@@ -42,9 +48,58 @@ def test_service_passes_context():
 
     assert result["message"] == "hello HLW"
     assert result["thread_id"] == "thread-001"
+
+    # 检查 configurable 中的用户身份
+    assert result["user_id"] == settings.user_id
+
+    # 检查 metadata 中的用户身份
+    assert result["metadata_user_id"] == settings.user_id
+
     assert result["request_id"] == "req-001"
     assert result["metadata_id"] == "req-001"
+
     assert get_request_id() == "-"
+
+
+def test_service_normalizes_explicit_user_id():
+    """检查显式传入的用户 ID 是否经过规范化。"""
+
+    async def scenario():
+        service = AgentService(
+            agent_graph=FakeGraph(),
+            max_concurrent=2,
+            user_id=" test_user ",
+        )
+
+        return await service.run(
+            "test identity",
+            thread_id="thread-002",
+            request_id="req-002",
+        )
+
+    result = asyncio.run(scenario())
+
+    assert result["user_id"] == "test_user"
+    assert result["metadata_user_id"] == "test_user"
+
+
+@pytest.mark.parametrize(
+    "invalid_user_id",
+    [
+        "../admin",
+        "user/001",
+        "user 001",
+        "a" * 65,
+    ],
+)
+def test_service_rejects_invalid_user_id(invalid_user_id):
+    """检查非法用户身份是否在 Agent 初始化时被拒绝。"""
+
+    with pytest.raises(ValueError, match="user_id"):
+        AgentService(
+            agent_graph=FakeGraph(),
+            user_id=invalid_user_id,
+        )
 
 
 def test_service_limits_concurrency():
@@ -65,6 +120,7 @@ def test_service_limits_concurrency():
                 return {
                     "request_id": get_request_id(),
                 }
+
             finally:
                 self.active -= 1
 

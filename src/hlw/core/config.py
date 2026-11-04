@@ -1,7 +1,7 @@
 """HLW 应用配置模块。
 
-集中定义运行时配置的唯一来源：数值来自环境变量，
-并通过 ``.env`` 文件提供本地开发时的默认值。
+集中定义运行时配置的唯一来源。
+通过环境变量和 .env 文件管理应用配置。
 """
 
 import os
@@ -10,55 +10,121 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# 项目根目录：本文件位于 src/hlw/core/config.py，
-# 向上 3 级（core -> hlw -> src -> 项目根）即仓库根路径。
+from hlw.core.identity import normalize_user_id
+
+# ============================================================
+# 1. 项目根目录
+# ============================================================
+
+# 当前文件位于：
+# src/hlw/core/config.py
+#
+# parents[3] 对应 HLW 项目根目录。
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
-# 在导入时加载项目根目录下的 .env；不覆盖已存在的环境变量，
-# 因此容器/CI 中注入的环境变量优先级更高。
+
+# ============================================================
+# 2. 加载环境变量
+# ============================================================
+
+# 加载项目根目录下的 .env 文件。
+# 默认不覆盖系统中已经存在的环境变量。
+
 load_dotenv(PROJECT_ROOT / ".env")
 
+
+# ============================================================
+# 3. 定义统一配置数据结构
+# ============================================================
 
 @dataclass(frozen=True)
 class AppSettings:
     """HLW 的统一应用配置。
 
-    使用 ``frozen=True`` 使实例不可变，避免运行期被意外修改。
+    frozen=True 表示配置对象创建后不可修改。
     """
 
-    environment: str  # 运行环境标识，如 development / production
-    chat_model: str  # 对话模型名称（默认走 Ollama）
-    ollama_base_url: str  # Ollama 的 OpenAI 兼容接口地址
-    fallback_model:str 
-    model_timeout_seconds:float 
+    # 运行环境
+    environment: str
+
+    # 主模型
+    chat_model: str
+
+    # Ollama 服务地址
+    ollama_base_url: str
+
+    # 备用模型
+    fallback_model: str
+
+    # 模型调用超时时间
+    model_timeout_seconds: float
+
+    # 当前用户身份
+    user_id: str
+
+
+# ============================================================
+# 4. 加载配置
+# ============================================================
 
 def load_settings() -> AppSettings:
-    """从环境变量读取配置。
+    """从环境变量读取配置并构建 AppSettings。
 
-    所有字段都有默认值，因此在未配置任何环境变量时也可直接运行。
+    如果没有配置 HLW_USER_ID，
+    默认使用 local_user。
     """
 
     return AppSettings(
+
+        # 运行环境
         environment=os.getenv(
-            "HLW_ENV", "development"
+            "HLW_ENV",
+            "development",
         ),
+
+        # 主模型
         chat_model=os.getenv(
-            "HLW_CHAT_MODEL", "qwen3:8b"
+            "HLW_CHAT_MODEL",
+            "qwen3:8b",
         ),
+
+        # Ollama 地址
         ollama_base_url=os.getenv(
             "HLW_OLLAMA_BASE_URL",
-            "http://127.0.0.1:11434/v1"
+            "http://127.0.0.1:11434/v1",
         ),
-        fallback_model=os.getenv("HLW_FALLBACK_MODEL", "qwen3:14b"),
+
+        # 备用模型
+        fallback_model=os.getenv(
+            "HLW_FALLBACK_MODEL",
+            "qwen3:14b",
+        ),
+
+        # 模型超时时间
         model_timeout_seconds=float(
-    os.getenv(
-        "HLW_MODEL_TIMEOUT_SECONDS",
-        "120",
-    )
-),
+            os.getenv(
+                "HLW_MODEL_TIMEOUT_SECONDS",
+                "120",
+            )
+        ),
+
+        # 用户身份
+        # 读取环境变量后，统一进行合法性校验。
+        user_id=normalize_user_id(
+            os.getenv(
+                "HLW_USER_ID",
+                "local_user",
+            )
+        ),
     )
 
 
-# 模块级单例：其他模块可直接 ``from hlw.core.config import settings``，
-# 避免每次调用都重复读取环境变量。
+# ============================================================
+# 5. 创建全局配置实例
+# ============================================================
+
+# 项目其他模块可以直接导入 settings，
+# 不需要重复读取 .env 或创建配置对象。
+
 settings = load_settings()
