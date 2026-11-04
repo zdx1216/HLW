@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from hlw.agent.persistent_runtime import (
     open_persistent_agent_service,
 )
+from hlw.core.logging_config import get_logger, setup_logging
 
 
 class ChatRequest(BaseModel):
@@ -34,6 +35,11 @@ class ChatResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Keep one persistent AgentService alive across requests."""
+    # 初始化统一日志。无论走 run_api.py 还是直接 uvicorn 启动，
+    # lifespan 都会执行，保证服务运行期日志格式一致。
+    setup_logging()
+    logger = get_logger(__name__)
+    logger.info("HLW API startup")
 
     async with open_persistent_agent_service(
         max_concurrent=2
