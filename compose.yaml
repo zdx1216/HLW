@@ -20,7 +20,7 @@ services:
   # ------------------------------------------------------------
   postgres:
     # 官方 PostgreSQL 16 镜像（不写 tag 默认 latest，固定版本更可复现）
-    image: postgres:16
+    image: pgvector/pgvector:0.8.7-pg16-trixie
 
     # 除非手动 stop，否则容器崩溃/宿主机重启后自动拉起
     restart: unless-stopped
