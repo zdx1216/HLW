@@ -56,7 +56,6 @@ graph = create_deep_agent(
     middleware=[fallback_middleware],
     system_prompt=SYSTEM_PROMPT,
 )
-
 def build_persistent_graph(
     checkpointer: BaseCheckpointSaver,
     store: BaseStore,

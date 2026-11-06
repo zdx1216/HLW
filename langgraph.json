@@ -1,7 +1,8 @@
+
 {
   "dependencies": ["."],
   "graphs": {
-    "hlw_core": "./src/hlw/agent/graph.py:build_persistent_graph()"
+    "hlw_core": "./src/hlw/agent/graph.py:graph"
   },
   "env": ".env",
   "checkpointer": {
