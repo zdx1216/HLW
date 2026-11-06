@@ -10,6 +10,7 @@ from hlw.core.config import settings
 from hlw.memory.checkpoints_postgres import (
     open_postgres_checkpointer,
 )
+from hlw.memory.store_postgres import open_postgres_store
 
 
 @asynccontextmanager
@@ -29,21 +30,21 @@ async def open_persistent_agent_service(
         退出 async with 后自动释放数据库连接。
     """
 
-    # 1. 打开 PostgreSQL Checkpointer
-    async with open_postgres_checkpointer() as saver:
-
-        # 2. 使用 Checkpointer 构建持久化 Agent Graph
+    # 同时打开 Checkpointer 和 Store
+    async with (
+        open_postgres_checkpointer() as saver,
+        open_postgres_store() as store,
+    ):
+        # 构建同时支持两种持久化能力的 Agent Graph
         persistent_graph = build_persistent_graph(
-            checkpointer=saver
+            checkpointer=saver,
+            store=store,
         )
 
-        # 3. 创建 AgentService
-        # 显式传入服务端配置的用户身份
+        # 创建 AgentService
         service = AgentService(
             agent_graph=persistent_graph,
             max_concurrent=max_concurrent,
             user_id=settings.user_id,
         )
-
-        # 4. 将服务交给调用方
         yield service

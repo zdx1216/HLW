@@ -17,29 +17,52 @@ def test_runtime_injects_user_identity_and_releases_checkpointer(
     events = []
 
     fake_saver = object()
+    fake_store = object()
     fake_graph = object()
     fake_service = object()
 
-    # 模拟 PostgreSQL Checkpointer 上下文管理器
+    # ============================================================
+    # 1. 模拟 PostgreSQL Checkpointer
+    # ============================================================
+
     @asynccontextmanager
     async def fake_open_checkpointer():
         events.append("checkpointer_opened")
 
         try:
             yield fake_saver
-
         finally:
             events.append("checkpointer_closed")
 
-    # 模拟 LangGraph 构建过程
-    def fake_build_graph(*, checkpointer):
+    # ============================================================
+    # 2. 模拟 PostgreSQL Store
+    # ============================================================
+
+    @asynccontextmanager
+    async def fake_open_store():
+        events.append("store_opened")
+
+        try:
+            yield fake_store
+        finally:
+            events.append("store_closed")
+
+    # ============================================================
+    # 3. 模拟 LangGraph 构建过程
+    # ============================================================
+
+    def fake_build_graph(*, checkpointer, store):
         assert checkpointer is fake_saver
+        assert store is fake_store
 
         events.append("graph_built")
 
         return fake_graph
 
-    # 模拟 AgentService 创建过程
+    # ============================================================
+    # 4. 模拟 AgentService 创建过程
+    # ============================================================
+
     def fake_agent_service(
         *,
         agent_graph,
@@ -54,11 +77,20 @@ def test_runtime_injects_user_identity_and_releases_checkpointer(
 
         return fake_service
 
-    # 替换真实依赖
+    # ============================================================
+    # 5. 替换真实依赖
+    # ============================================================
+
     monkeypatch.setattr(
         runtime,
         "open_postgres_checkpointer",
         fake_open_checkpointer,
+    )
+
+    monkeypatch.setattr(
+        runtime,
+        "open_postgres_store",
+        fake_open_store,
     )
 
     monkeypatch.setattr(
@@ -73,6 +105,10 @@ def test_runtime_injects_user_identity_and_releases_checkpointer(
         fake_agent_service,
     )
 
+    # ============================================================
+    # 6. 执行测试
+    # ============================================================
+
     async def scenario():
 
         async with runtime.open_persistent_agent_service(
@@ -81,17 +117,21 @@ def test_runtime_injects_user_identity_and_releases_checkpointer(
 
             assert service is fake_service
 
+            # 两个资源均已打开，Graph 和 Service 已创建
             assert events == [
                 "checkpointer_opened",
+                "store_opened",
                 "graph_built",
                 "service_created",
             ]
 
-        # 退出上下文后，Checkpointer 必须关闭
+        # 退出上下文后，按逆序释放资源
         assert events == [
             "checkpointer_opened",
+            "store_opened",
             "graph_built",
             "service_created",
+            "store_closed",
             "checkpointer_closed",
         ]
 
@@ -101,19 +141,63 @@ def test_runtime_injects_user_identity_and_releases_checkpointer(
 def test_runtime_releases_checkpointer_after_exception(
     monkeypatch,
 ):
-    """验证调用方发生异常时，Checkpointer 仍然关闭。"""
+    """验证调用方发生异常时，两个资源仍然正确关闭。"""
 
     events = []
+
+    fake_saver = object()
+    fake_store = object()
+
+    # ============================================================
+    # 1. 模拟 Checkpointer
+    # ============================================================
 
     @asynccontextmanager
     async def fake_open_checkpointer():
         events.append("checkpointer_opened")
 
         try:
-            yield object()
-
+            yield fake_saver
         finally:
             events.append("checkpointer_closed")
+
+    # ============================================================
+    # 2. 模拟 Store
+    # ============================================================
+
+    @asynccontextmanager
+    async def fake_open_store():
+        events.append("store_opened")
+
+        try:
+            yield fake_store
+        finally:
+            events.append("store_closed")
+
+    # ============================================================
+    # 3. 模拟 Graph 构建
+    # ============================================================
+
+    def fake_build_graph(*, checkpointer, store):
+        assert checkpointer is fake_saver
+        assert store is fake_store
+
+        events.append("graph_built")
+
+        return object()
+
+    # ============================================================
+    # 4. 模拟 Service 创建
+    # ============================================================
+
+    def fake_agent_service(**kwargs):
+        events.append("service_created")
+
+        return object()
+
+    # ============================================================
+    # 5. 注入模拟依赖
+    # ============================================================
 
     monkeypatch.setattr(
         runtime,
@@ -123,15 +207,25 @@ def test_runtime_releases_checkpointer_after_exception(
 
     monkeypatch.setattr(
         runtime,
+        "open_postgres_store",
+        fake_open_store,
+    )
+
+    monkeypatch.setattr(
+        runtime,
         "build_persistent_graph",
-        lambda *, checkpointer: object(),
+        fake_build_graph,
     )
 
     monkeypatch.setattr(
         runtime,
         "AgentService",
-        lambda **kwargs: object(),
+        fake_agent_service,
     )
+
+    # ============================================================
+    # 6. 模拟调用方异常
+    # ============================================================
 
     async def scenario():
 
@@ -146,9 +240,14 @@ def test_runtime_releases_checkpointer_after_exception(
 
                 raise RuntimeError("simulated failure")
 
+        # 即使调用方发生异常，两个资源也必须释放
         assert events == [
             "checkpointer_opened",
+            "store_opened",
+            "graph_built",
+            "service_created",
             "caller_entered",
+            "store_closed",
             "checkpointer_closed",
         ]
 
@@ -158,22 +257,54 @@ def test_runtime_releases_checkpointer_after_exception(
 def test_runtime_releases_checkpointer_when_graph_build_fails(
     monkeypatch,
 ):
-    """验证 Graph 构建失败时，Checkpointer 仍然关闭。"""
+    """验证 Graph 构建失败时，两个资源仍然正确关闭。"""
 
     events = []
+
+    fake_saver = object()
+    fake_store = object()
+
+    # ============================================================
+    # 1. 模拟 Checkpointer
+    # ============================================================
 
     @asynccontextmanager
     async def fake_open_checkpointer():
         events.append("checkpointer_opened")
 
         try:
-            yield object()
-
+            yield fake_saver
         finally:
             events.append("checkpointer_closed")
 
-    def fake_build_graph(*, checkpointer):
+    # ============================================================
+    # 2. 模拟 Store
+    # ============================================================
+
+    @asynccontextmanager
+    async def fake_open_store():
+        events.append("store_opened")
+
+        try:
+            yield fake_store
+        finally:
+            events.append("store_closed")
+
+    # ============================================================
+    # 3. 模拟 Graph 构建失败
+    # ============================================================
+
+    def fake_build_graph(*, checkpointer, store):
+        assert checkpointer is fake_saver
+        assert store is fake_store
+
+        events.append("graph_build_failed")
+
         raise RuntimeError("graph build failed")
+
+    # ============================================================
+    # 4. 注入模拟依赖
+    # ============================================================
 
     monkeypatch.setattr(
         runtime,
@@ -183,9 +314,19 @@ def test_runtime_releases_checkpointer_when_graph_build_fails(
 
     monkeypatch.setattr(
         runtime,
+        "open_postgres_store",
+        fake_open_store,
+    )
+
+    monkeypatch.setattr(
+        runtime,
         "build_persistent_graph",
         fake_build_graph,
     )
+
+    # ============================================================
+    # 5. 执行测试
+    # ============================================================
 
     async def scenario():
 
@@ -197,8 +338,12 @@ def test_runtime_releases_checkpointer_when_graph_build_fails(
             async with runtime.open_persistent_agent_service():
                 pass
 
+        # Graph 构建失败后，两个资源必须释放
         assert events == [
             "checkpointer_opened",
+            "store_opened",
+            "graph_build_failed",
+            "store_closed",
             "checkpointer_closed",
         ]
 

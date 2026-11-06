@@ -18,7 +18,6 @@ class ChatRequest(BaseModel):
     """Incoming Agent request."""
 
     model_config = ConfigDict(str_strip_whitespace=True)
-
     message: str = Field(min_length=1)
     thread_id: str | None = Field(default=None, min_length=1)
     request_id: str | None = Field(default=None, min_length=1)

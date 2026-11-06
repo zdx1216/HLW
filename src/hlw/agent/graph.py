@@ -4,6 +4,7 @@
 from deepagents import create_deep_agent
 from deepagents.backends import StateBackend
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.store.base import BaseStore
 
 from hlw.models.gateway import build_model
 from hlw.models.resilience import ControlledFallbackMiddleware
@@ -49,6 +50,7 @@ graph = create_deep_agent(
 
 def build_persistent_graph(
     checkpointer: BaseCheckpointSaver,
+    store: BaseStore,
 ):
     """构建使用外部 Checkpointer 的 HLW Agent Graph。"""
 
@@ -63,5 +65,6 @@ def build_persistent_graph(
         tools=[get_project_status],
         middleware=[persistent_fallback],
         system_prompt=SYSTEM_PROMPT,
-        checkpointer=checkpointer,
+        checkpointer=checkpointer, # 短期记忆：持久化当前thread的对话状态
+        store=store,               # 长期记忆：支持跨thread的记忆存储和检索
     )
