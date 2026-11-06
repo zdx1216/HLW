@@ -1,11 +1,13 @@
-
 {
   "dependencies": ["."],
   "graphs": {
-    "hlw_core": "./src/hlw/agent/graph.py:graph",
+    "hlw_core": "./src/hlw/agent/graph.py:build_persistent_graph()"
   },
   "env": ".env",
   "checkpointer": {
     "path": "./src/hlw/memory/checkpoints_postgres.py:open_postgres_checkpointer"
+  },
+  "store": {
+    "path": "./src/hlw/memory/store_postgres.py:open_postgres_store"
   }
 }
