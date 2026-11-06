@@ -110,7 +110,11 @@ services:
       HLW_FALLBACK_MODEL: ${HLW_FALLBACK_MODEL:-qwen3:14b}
       # 模型单次调用超时（秒），超时算可恢复错误，会触发重试/回退
       HLW_MODEL_TIMEOUT_SECONDS: ${HLW_MODEL_TIMEOUT_SECONDS:-120}
-
+      # ---- Embedding 模型配置 ----
+      HLW_EMBEDDING_MODEL: ${HLW_EMBEDDING_MODEL:-bge-m3:latest}
+      HLW_OLLAMA_EMBEDDING_BASE_URL: http://host.docker.internal:11434
+      HLW_EMBEDDING_DIMENSIONS: ${HLW_EMBEDDING_DIMENSIONS:-1024}
+      
       # ---- 日志 ----
       HLW_LOG_LEVEL: ${HLW_LOG_LEVEL:-INFO}
       # Python 不缓冲输出，配合 Dockerfile 里的同名设置，

@@ -344,3 +344,83 @@ class MemoryManager:
         )
 
         return True
+
+    async def search_memories(
+        self,
+        user_id: str,
+        query: str,
+        category: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """通过自然语言语义检索用户长期记忆。
+
+        支持：
+        1. 根据自然语言查询。
+        2. 根据记忆类别筛选。
+        3. 限制返回数量。
+        4. 分页检索。
+        5. 返回语义相似度分数。
+        """
+
+        # STEP 1：构建用户命名空间。
+        # 保证不同用户的记忆相互隔离。
+        namespace = self._build_namespace(user_id)
+
+        # STEP 2：检查查询文本。
+        query = self._validate_text(
+            query,
+            "query",
+        )
+
+        # STEP 3：检查 limit。
+        if (
+            not isinstance(limit, int)
+            or isinstance(limit, bool)
+            or limit < 1
+        ):
+            raise ValueError(
+                "limit 必须是正整数"
+            )
+
+        # STEP 4：检查 offset。
+        if (
+            not isinstance(offset, int)
+            or isinstance(offset, bool)
+            or offset < 0
+        ):
+            raise ValueError(
+                "offset 必须是非负整数"
+            )
+
+        # STEP 5：构建类别过滤条件。
+        filters = None
+
+        if category is not None:
+            category = self._validate_text(
+                category,
+                "category",
+            )
+
+            filters = {
+                "category": category,
+            }
+
+        # STEP 6：执行语义检索。
+        items = await self._store.asearch(
+            namespace,
+            query=query,
+            filter=filters,
+            limit=limit,
+            offset=offset,
+        )
+
+        # STEP 7：转换为统一结果结构。
+        return [
+            {
+                "key": item.key,
+                **dict(item.value),
+                "score": item.score,
+            }
+            for item in items
+        ]

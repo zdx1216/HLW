@@ -16,11 +16,33 @@
 """
 
 import pytest
+from langchain_core.embeddings import Embeddings
 from langgraph.store.memory import InMemoryStore
 
 from hlw.memory.manager import MemoryManager
 
 
+class FakeEmbeddings(Embeddings):
+    """用于单元测试的模拟向量模型。"""
+
+    def embed_query(self, text: str) -> list[float]:
+        if "代码" in text or "注释" in text:
+            return [1.0, 0.0, 0.0]
+
+        if "项目" in text:
+            return [0.0, 1.0, 0.0]
+
+        return [0.0, 0.0, 1.0]
+
+    def embed_documents(
+        self,
+        texts: list[str],
+    ) -> list[list[float]]:
+        return [
+            self.embed_query(text)
+            for text in texts
+        ]
+        
 def create_manager() -> MemoryManager:
     """创建使用内存 Store 的 MemoryManager。
 
@@ -31,6 +53,47 @@ def create_manager() -> MemoryManager:
     store = InMemoryStore()
 
     return MemoryManager(store)
+
+
+@pytest.mark.anyio
+async def test_search_memories_semantic():
+    """测试长期记忆语义检索。"""
+
+    store = InMemoryStore(
+        index={
+            "dims": 3,
+            "embed": FakeEmbeddings(),
+            "fields": ["content"],
+        }
+    )
+
+    manager = MemoryManager(store)
+
+    await manager.save_memory(
+        "user_001",
+        "learning_style",
+        "喜欢详细的中文代码注释",
+        category="preference",
+    )
+
+    await manager.save_memory(
+        "user_001",
+        "project",
+        "正在开发 HLW 项目",
+        category="project",
+    )
+
+    results = await manager.search_memories(
+        user_id="user_001",
+        query="我喜欢什么样的代码注释？",
+        limit=5,
+    )
+
+    assert len(results) >= 1
+
+    assert results[0]["key"] == "learning_style"
+
+    assert results[0]["score"] is not None
 
 
 @pytest.mark.anyio
