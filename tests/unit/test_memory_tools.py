@@ -5,7 +5,6 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
 from langchain_core.embeddings import Embeddings
 from langgraph.store.memory import InMemoryStore
 
@@ -169,3 +168,23 @@ def test_tool_definition():
     )
 
     assert model_fields == {"query"}
+    
+@pytest.mark.anyio
+async def test_invalid_configurable_type():
+    """测试 configurable 类型错误时抛出 TypeError。"""
+
+    runtime = SimpleNamespace(
+        config={
+            "configurable": None,
+        },
+        store=create_store(),
+    )
+
+    with pytest.raises(
+        TypeError,
+        match="configurable",
+    ):
+        await _search_user_memories(
+            query="我的偏好",
+            runtime=runtime,
+        )

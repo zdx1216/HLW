@@ -25,7 +25,7 @@ async def _search_user_memories(
     configurable = runtime.config.get("configurable", {})
 
     if not isinstance(configurable, Mapping):
-        raise RuntimeError("Agent 运行配置缺少 configurable")
+        raise TypeError("Agent 运行配置缺少 configurable")
 
     raw_user_id = configurable.get("user_id")
 

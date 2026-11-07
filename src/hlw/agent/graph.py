@@ -8,8 +8,9 @@ from langgraph.store.base import BaseStore
 
 from hlw.models.gateway import build_model
 from hlw.models.resilience import ControlledFallbackMiddleware
-from hlw.tools.project_tools import get_project_status
 from hlw.tools.memory_tools import search_user_memories
+from hlw.tools.project_tools import get_project_status
+
 SYSTEM_PROMPT = """
 你是 Hermes Local Workbench（HLW）的核心 AI 助手。
 当前项目的实际版本、开发阶段和已实现功能，
@@ -70,7 +71,7 @@ def build_persistent_graph(
     return create_deep_agent(
         model=model,
         backend=StateBackend(),
-        tools=[get_project_status],
+        tools=[get_project_status, search_user_memories],
         middleware=[persistent_fallback],
         system_prompt=SYSTEM_PROMPT,
         checkpointer=checkpointer, # 短期记忆：持久化当前thread的对话状态
