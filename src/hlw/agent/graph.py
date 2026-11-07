@@ -1,5 +1,6 @@
-
 """Hermes Local Workbench 主 Agent 图入口。"""
+
+from typing import Any
 
 from deepagents import create_deep_agent
 from deepagents.backends import StateBackend
@@ -43,37 +44,86 @@ Multi-Agent、安全审批及可观测性等能力。
 """
 
 
+# ============================================================
+# 1. 初始化模型
+# ============================================================
+
 model = build_model("primary")
 fallback_model = build_model("fallback")
-fallback_middleware = ControlledFallbackMiddleware(
-    fallback_model = fallback_model,
-    max_retries=2
-)
 
-graph = create_deep_agent(
-    model=model,
-    backend=StateBackend(),
-    tools=[get_project_status, search_user_memories],
-    middleware=[fallback_middleware],
-    system_prompt=SYSTEM_PROMPT,
-)
-def build_persistent_graph(
-    checkpointer: BaseCheckpointSaver,
-    store: BaseStore,
-):
-    """构建使用外部 Checkpointer 的 HLW Agent Graph。"""
 
-    persistent_fallback = ControlledFallbackMiddleware(
+def build_fallback_middleware() -> ControlledFallbackMiddleware:
+    """创建模型回退 Middleware 实例。"""
+
+    return ControlledFallbackMiddleware(
         fallback_model=fallback_model,
         max_retries=2,
     )
 
-    return create_deep_agent(
-        model=model,
-        backend=StateBackend(),
-        tools=[get_project_status, search_user_memories],
-        middleware=[persistent_fallback],
-        system_prompt=SYSTEM_PROMPT,
-        checkpointer=checkpointer, # 短期记忆：持久化当前thread的对话状态
-        store=store,               # 长期记忆：支持跨thread的记忆存储和检索
-    )
+
+# ============================================================
+# 2. 统一 Agent Graph Factory
+# ============================================================
+
+
+def build_agent_graph(
+    *,
+    checkpointer: BaseCheckpointSaver | None = None,
+    store: BaseStore | None = None,
+):
+    """
+    统一构建 HLW Agent Graph。
+
+    普通模式：
+        不传入 checkpointer 和 store。
+
+    持久化模式：
+        传入 PostgreSQL Checkpointer 和 Store。
+
+    所有模式共享：
+        - Model
+        - Backend
+        - Tools
+        - Middleware
+        - System Prompt
+    """
+
+    # --------------------------------------------------------
+    # STEP 1：统一构建 Graph 配置
+    # --------------------------------------------------------
+
+    graph_kwargs: dict[str, Any] = {
+        "model": model,
+        "backend": StateBackend(),
+        "tools": [
+            get_project_status,
+            search_user_memories,
+        ],
+        "middleware": [
+            build_fallback_middleware(),
+        ],
+        "system_prompt": SYSTEM_PROMPT,
+    }
+
+    # --------------------------------------------------------
+    # STEP 2：按需注入持久化组件
+    # --------------------------------------------------------
+    # 持久化组件必须同时提供，避免出现不完整的运行模式
+    if (checkpointer is None) != (store is None):
+        raise ValueError("checkpointer 和 store 必须同时提供或同时省略")
+    # 如果启用持久化模式，将两个组件注入 Graph 配置
+    if checkpointer is not None:
+        graph_kwargs["checkpointer"] = checkpointer
+        graph_kwargs["store"] = store
+        # --------------------------------------------------------
+        # STEP 3：创建 Agent Graph
+        # --------------------------------------------------------
+
+    return create_deep_agent(**graph_kwargs)
+
+
+# ============================================================
+# 3. LangGraph Dev 默认 Graph
+# ============================================================
+
+graph = build_agent_graph()

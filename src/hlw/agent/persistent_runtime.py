@@ -1,10 +1,9 @@
-
 """HLW 常驻 Agent 服务的生命周期管理。"""
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from hlw.agent.graph import build_persistent_graph
+from hlw.agent.graph import build_agent_graph
 from hlw.agent.service import AgentService
 from hlw.core.config import settings
 from hlw.memory.checkpoints_postgres import (
@@ -36,14 +35,14 @@ async def open_persistent_agent_service(
         open_postgres_store() as store,
     ):
         # 构建同时支持两种持久化能力的 Agent Graph
-        persistent_graph = build_persistent_graph(
+        agent_graph = build_agent_graph(
             checkpointer=saver,
             store=store,
         )
 
         # 创建 AgentService
         service = AgentService(
-            agent_graph=persistent_graph,
+            agent_graph=agent_graph,
             max_concurrent=max_concurrent,
             user_id=settings.user_id,
         )

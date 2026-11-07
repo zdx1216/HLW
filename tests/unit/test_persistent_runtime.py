@@ -1,4 +1,3 @@
-
 """HLW Persistent Runtime 生命周期测试。"""
 
 import asyncio
@@ -95,7 +94,7 @@ def test_runtime_injects_user_identity_and_releases_checkpointer(
 
     monkeypatch.setattr(
         runtime,
-        "build_persistent_graph",
+        "build_agent_graph",
         fake_build_graph,
     )
 
@@ -114,7 +113,6 @@ def test_runtime_injects_user_identity_and_releases_checkpointer(
         async with runtime.open_persistent_agent_service(
             max_concurrent=3,
         ) as service:
-
             assert service is fake_service
 
             # 两个资源均已打开，Graph 和 Service 已创建
@@ -213,7 +211,7 @@ def test_runtime_releases_checkpointer_after_exception(
 
     monkeypatch.setattr(
         runtime,
-        "build_persistent_graph",
+        "build_agent_graph",
         fake_build_graph,
     )
 
@@ -233,9 +231,7 @@ def test_runtime_releases_checkpointer_after_exception(
             RuntimeError,
             match="simulated failure",
         ):
-
             async with runtime.open_persistent_agent_service():
-
                 events.append("caller_entered")
 
                 raise RuntimeError("simulated failure")
@@ -320,7 +316,7 @@ def test_runtime_releases_checkpointer_when_graph_build_fails(
 
     monkeypatch.setattr(
         runtime,
-        "build_persistent_graph",
+        "build_agent_graph",
         fake_build_graph,
     )
 
@@ -334,7 +330,6 @@ def test_runtime_releases_checkpointer_when_graph_build_fails(
             RuntimeError,
             match="graph build failed",
         ):
-
             async with runtime.open_persistent_agent_service():
                 pass
 
