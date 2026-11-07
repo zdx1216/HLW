@@ -1,4 +1,3 @@
-
 """HLW HTTP API entrypoint."""
 
 from collections.abc import AsyncGenerator
@@ -36,13 +35,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Keep one persistent AgentService alive across requests."""
     # 初始化统一日志。无论走 run_api.py 还是直接 uvicorn 启动，
     # lifespan 都会执行，保证服务运行期日志格式一致。
-    setup_logging()
+    setup_logging(runtime="api")
     logger = get_logger(__name__)
     logger.info("HLW API startup")
 
-    async with open_persistent_agent_service(
-        max_concurrent=2
-    ) as service:
+    async with open_persistent_agent_service(max_concurrent=2) as service:
         app.state.agent_service = service
 
         try:

@@ -7,10 +7,14 @@ from deepagents.backends import StateBackend
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
 
+from hlw.agent.runtime_probe import RuntimeContextProbeMiddleware
 from hlw.models.gateway import build_model
 from hlw.models.resilience import ControlledFallbackMiddleware
 from hlw.tools.memory_tools import search_user_memories
 from hlw.tools.project_tools import get_project_status
+from hlw.agent.request_context_middleware import (
+    RequestContextMiddleware,
+)
 
 SYSTEM_PROMPT = """
 你是 Hermes Local Workbench（HLW）的核心 AI 助手。
@@ -100,6 +104,7 @@ def build_agent_graph(
             search_user_memories,
         ],
         "middleware": [
+            RequestContextMiddleware(),
             build_fallback_middleware(),
         ],
         "system_prompt": SYSTEM_PROMPT,

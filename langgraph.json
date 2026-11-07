@@ -2,7 +2,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "hlw_core": "./src/hlw/agent/graph.py:graph"
+    "hlw_core": "./src/hlw/agent/langgraph_dev.py:graph"
   },
   "env": ".env",
   "checkpointer": {
