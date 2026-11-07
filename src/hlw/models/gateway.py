@@ -37,6 +37,7 @@ def build_model(role: ModelRole) -> ChatOpenAI:
     if settings.model_timeout_seconds <= 0:
         raise ValueError("模型超时必须大于零")
 
+        
     return ChatOpenAI(
         model=models[role],
         base_url=settings.ollama_base_url,
@@ -44,4 +45,6 @@ def build_model(role: ModelRole) -> ChatOpenAI:
         temperature=0,
         timeout=settings.model_timeout_seconds,
         max_retries=0,
+        stream_usage=True,
     )
+

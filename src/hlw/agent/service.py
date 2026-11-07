@@ -77,7 +77,12 @@ class AgentService:
         # 4. 构建 LangGraph 运行配置
         # ==================================================
 
+        # 每次 Agent 执行分配独立的根运行 ID。
+        # request_id 对应业务请求；run_id 对应本次图执行。
+        run_id = uuid4()
+
         config: RunnableConfig = {
+            "run_id": run_id,
             "configurable": {
                 "thread_id": thread_id,
                 "user_id": self._user_id,

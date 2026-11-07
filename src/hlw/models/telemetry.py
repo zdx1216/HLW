@@ -12,9 +12,10 @@ import logging
 from dataclasses import asdict, dataclass
 from typing import Literal
 
+from hlw.core.event_logger import safe_emit_event
 from hlw.core.logging_config import get_logger
-from hlw.core.request_context import get_request_id
-from hlw.core.event_logger import emit_event
+from hlw.core.request_context import get_request_id, get_run_id
+
 logger = get_logger(__name__)
 
 # 调用结果只有两种：成功 / 失败（失败时配合 error_kind 细分原因）
@@ -70,9 +71,10 @@ def emit_model_call(event: ModelCallEvent) -> None:
 
     # 成功 → INFO（正常流水）；失败 → ERROR（告警/排查）
     level = logging.INFO if event.status == "success" else logging.ERROR
-    emit_event(
+    safe_emit_event(
         "model.call.summary",
         payload=asdict(event),
+        run_id=get_run_id(),
         duration_ms=event.latency_ms,
         status=event.status,
     )

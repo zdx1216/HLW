@@ -1,4 +1,3 @@
-
 """HLW 结构化事件日志。
 
 统一记录 API 和 LangGraph Dev 的运行事件。
@@ -35,13 +34,9 @@ SECRET_ASSIGNMENT_PATTERN = re.compile(
     r"refresh[_-]?token)\b(\s*[:=]\s*)([^\s,;]+)"
 )
 
-BEARER_PATTERN = re.compile(
-    r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+"
-)
+BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 
-API_KEY_PATTERN = re.compile(
-    r"\bsk-[A-Za-z0-9_-]{16,}\b"
-)
+API_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b")
 
 
 def _redact_text(value: str) -> str:
@@ -152,9 +147,9 @@ def emit_event(
 
     record = {
         "schema_version": SCHEMA_VERSION,
-        "timestamp": datetime.now(UTC).isoformat(
-            timespec="milliseconds"
-        ).replace("+00:00", "Z"),
+        "timestamp": datetime.now(UTC)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z"),
         "runtime": runtime,
         "event": event,
         "trace_id": current_trace_id,
@@ -177,3 +172,32 @@ def emit_event(
             separators=(",", ":"),
         ),
     )
+
+
+def safe_emit_event(
+    event: str,
+    **kwargs: Any,
+) -> bool:
+    """尽力记录事件，日志故障不得影响 Agent 执行。
+
+    True 表示事件写入过程未抛异常。
+    False 表示事件采集失败，并非业务执行失败。
+    """
+    try:
+        emit_event(event, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        # 不记录日志内容及异常原文，避免泄露凭证。
+        # 诊断信息写入普通日志，而不是 JSONL 事件日志。
+        try:
+            logging.getLogger("hlw.core.event_logger").warning(
+                "Event capture failed: event=%s error_type=%s",
+                event,
+                type(exc).__name__,
+            )
+        except Exception:   # noqa: BLE001, S110
+            # 即使普通诊断日志也失败，仍然不能影响业务。
+            pass
+
+        return False
+
+    return True

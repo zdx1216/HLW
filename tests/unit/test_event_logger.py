@@ -98,3 +98,22 @@ def test_invalid_duration_rejected():
             "test.event",
             duration_ms=-1,
         )
+def test_safe_emit_event_handles_failure(monkeypatch):
+    import hlw.core.event_logger as event_module
+
+    def failing_writer(*args, **kwargs):
+        raise OSError("simulated disk failure")
+
+    monkeypatch.setattr(
+        event_module,
+        "emit_event",
+        failing_writer,
+    )
+
+    assert (
+        event_module.safe_emit_event(
+            "test.event",
+            payload={"message": "hello"},
+        )
+        is False
+    )

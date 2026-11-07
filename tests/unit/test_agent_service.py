@@ -177,3 +177,36 @@ def test_service_propagates_errors():
         assert get_request_id() == "-"
 
     asyncio.run(scenario())
+
+
+def test_service_assigns_unique_run_id():
+    """每次 API Agent 执行具有独立的根 Run ID。"""
+
+    from uuid import UUID
+
+    class CapturingGraph:
+        def __init__(self):
+            self.run_ids = []
+
+        async def ainvoke(self, inputs, config):
+            self.run_ids.append(config["run_id"])
+            return {"messages": []}
+
+    async def scenario():
+        graph = CapturingGraph()
+        service = AgentService(graph)
+
+        for index in range(2):
+            await service.run(
+                "test",
+                thread_id=f"thread-{index}",
+                request_id=f"request-{index}",
+            )
+
+        return graph.run_ids
+
+    run_ids = asyncio.run(scenario())
+
+    assert len(run_ids) == 2
+    assert all(isinstance(value, UUID) for value in run_ids)
+    assert run_ids[0] != run_ids[1]

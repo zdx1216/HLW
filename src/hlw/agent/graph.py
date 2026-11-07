@@ -7,17 +7,24 @@ from deepagents.backends import StateBackend
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
 
+from hlw.agent.execution_observability import (
+    AgentRunAuditMiddleware,
+)
+from hlw.agent.model_observability import (
+    ModelAttemptLoggingMiddleware,
+    ModelCallAuditMiddleware,
+)
 from hlw.agent.request_context_middleware import (
     RequestContextMiddleware,
+)
+from hlw.agent.tool_observability import (
+    ToolCallAuditMiddleware,
 )
 from hlw.models.gateway import build_model
 from hlw.models.resilience import ControlledFallbackMiddleware
 from hlw.tools.memory_tools import search_user_memories
 from hlw.tools.project_tools import get_project_status
-from hlw.agent.model_observability import (
-    ModelAttemptLoggingMiddleware,
-    ModelCallAuditMiddleware,
-)
+
 SYSTEM_PROMPT = """
 你是 Hermes Local Workbench（HLW）的核心 AI 助手。
 当前项目的实际版本、开发阶段和已实现功能，
@@ -106,7 +113,9 @@ def build_agent_graph(
             search_user_memories,
         ],
         "middleware": [
+            AgentRunAuditMiddleware(),
             RequestContextMiddleware(),
+            ToolCallAuditMiddleware(),
             ModelCallAuditMiddleware(),
             build_fallback_middleware(),
             ModelAttemptLoggingMiddleware(),

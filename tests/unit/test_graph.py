@@ -1,9 +1,17 @@
 """HLW 主 Agent 结构测试。"""
 
+from hlw.agent.execution_observability import (
+    AgentRunAuditMiddleware,
+)
 from hlw.agent.graph import graph, model
+from hlw.agent.model_observability import (
+    ModelAttemptLoggingMiddleware,
+    ModelCallAuditMiddleware,
+)
 from hlw.agent.request_context_middleware import (
     RequestContextMiddleware,
 )
+from hlw.agent.tool_observability import ToolCallAuditMiddleware
 from hlw.core.config import settings
 from hlw.models.resilience import ControlledFallbackMiddleware
 from hlw.tools.memory_tools import search_user_memories
@@ -150,8 +158,12 @@ def test_graph_modes_share_business_configuration(monkeypatch):
 
     # 5. Middleware 类型和顺序一致
     expected_types = [
+        AgentRunAuditMiddleware,
         RequestContextMiddleware,
+        ToolCallAuditMiddleware,
+        ModelCallAuditMiddleware,
         ControlledFallbackMiddleware,
+        ModelAttemptLoggingMiddleware,
     ]
 
     assert [type(item) for item in normal_config["middleware"]] == expected_types

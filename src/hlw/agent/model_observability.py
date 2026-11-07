@@ -1,9 +1,9 @@
-
 """HLW 模型调用全链路可观测性 Middleware。"""
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
 from time import perf_counter
@@ -15,9 +15,12 @@ from langchain.agents.middleware.types import ModelRequest, ModelResponse
 from langgraph.config import get_config
 from langgraph.errors import GraphBubbleUp
 
-from hlw.core.event_logger import emit_event
-from hlw.core.request_context import get_request_id
-
+from hlw.core.event_logger import safe_emit_event
+from hlw.core.request_context import (
+    get_request_id,
+    reset_run_id,
+    set_run_id,
+)
 
 _active_call_id: ContextVar[str | None] = ContextVar(
     "hlw_model_call_id",
@@ -28,6 +31,20 @@ _attempt_state: ContextVar[dict[str, int] | None] = ContextVar(
     "hlw_model_attempt_state",
     default=None,
 )
+
+
+def _safe_snapshot(
+    builder: Callable[[], dict],
+) -> dict:
+    """采集快照失败时返回错误元数据，不中断模型。"""
+
+    try:
+        return builder()
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "capture_error_type": type(exc).__name__,
+            "capture_status": "failed",
+        }
 
 
 def _mapping(value: Any) -> Mapping:
@@ -69,10 +86,7 @@ def _context_fields(request: ModelRequest[Any]) -> dict:
         or configurable.get("run_id")
     )
 
-    user_id = (
-        configurable.get("user_id")
-        or metadata.get("user_id")
-    )
+    user_id = configurable.get("user_id") or metadata.get("user_id")
 
     return {
         "request_id": str(request_id) if request_id else None,
@@ -145,10 +159,7 @@ def _request_data(request: ModelRequest[Any]) -> dict:
 
     return {
         "model": _model_data(request.model),
-        "messages": [
-            _message_data(message)
-            for message in request.messages
-        ],
+        "messages": [_message_data(message) for message in request.messages],
         "system_message": (
             _message_data(request.system_message)
             if request.system_message is not None
@@ -156,10 +167,7 @@ def _request_data(request: ModelRequest[Any]) -> dict:
         ),
         "system_prompt": getattr(request, "system_prompt", None),
         "tool_choice": getattr(request, "tool_choice", None),
-        "tools": [
-            _tool_data(tool)
-            for tool in (request.tools or [])
-        ],
+        "tools": [_tool_data(tool) for tool in (request.tools or [])],
         "response_format": getattr(request, "response_format", None),
         "model_settings": getattr(request, "model_settings", None),
     }
@@ -171,16 +179,9 @@ def _response_data(response: Any) -> dict:
     messages = getattr(response, "result", None)
 
     if messages is None:
-        messages = (
-            [response]
-            if getattr(response, "type", None) == "ai"
-            else []
-        )
+        messages = [response] if getattr(response, "type", None) == "ai" else []
 
-    serialized = [
-        _message_data(message)
-        for message in messages
-    ]
+    serialized = [_message_data(message) for message in messages]
 
     return {
         "messages": serialized,
@@ -195,8 +196,7 @@ def _response_data(response: Any) -> dict:
             if getattr(message, "usage_metadata", None)
         ],
         "response_metadata": [
-            getattr(message, "response_metadata", {})
-            for message in messages
+            getattr(message, "response_metadata", {}) for message in messages
         ],
     }
 
@@ -211,23 +211,36 @@ def _emit(
     duration_ms: float | None = None,
     status: str | None = None,
 ) -> None:
-    """统一写入结构化事件日志。"""
+    """安全记录模型事件，日志异常不影响模型执行。"""
 
-    fields = _context_fields(request)
+    try:
+        fields = _context_fields(request)
 
-    emit_event(
-        event,
-        payload=payload,
-        request_id=fields["request_id"],
-        trace_id=fields["trace_id"],
-        span_id=span_id,
-        parent_span_id=parent_span_id,
-        user_id=fields["user_id"],
-        thread_id=fields["thread_id"],
-        run_id=fields["run_id"],
-        duration_ms=duration_ms,
-        status=status,
-    )
+        safe_emit_event(
+            event,
+            payload=payload,
+            request_id=fields["request_id"],
+            trace_id=fields["trace_id"],
+            span_id=span_id,
+            parent_span_id=parent_span_id,
+            user_id=fields["user_id"],
+            thread_id=fields["thread_id"],
+            run_id=fields["run_id"],
+            duration_ms=duration_ms,
+            status=status,
+        )
+
+    except Exception as exc:  # noqa: BLE001
+        # 即使上下文解析或诊断日志失败，
+        # 也不能影响 Agent 的模型调用。
+        try:
+            logging.getLogger(__name__).warning(
+                "Model audit context failed: error_type=%s",
+                type(exc).__name__,
+            )
+        except Exception:  # noqa: BLE001, S110
+            # 诊断日志失败也不能影响模型调用。
+            pass
 
 
 class ModelCallAuditMiddleware(AgentMiddleware):
@@ -247,13 +260,14 @@ class ModelCallAuditMiddleware(AgentMiddleware):
 
         call_token = _active_call_id.set(call_id)
         attempt_token = _attempt_state.set({"count": 0})
+        run_id_token = set_run_id(_context_fields(request)["run_id"])
 
         _emit(
             "model.request",
             request,
             {
                 "model_call_id": call_id,
-                "request": _request_data(request),
+                "request": _safe_snapshot(lambda: _request_data(request)),
             },
             span_id=call_id,
             status="started",
@@ -304,7 +318,7 @@ class ModelCallAuditMiddleware(AgentMiddleware):
                 request,
                 {
                     "model_call_id": call_id,
-                    "response": _response_data(response),
+                    "response": _safe_snapshot(lambda: _response_data(response)),
                 },
                 span_id=call_id,
                 duration_ms=(perf_counter() - started) * 1000,
@@ -313,6 +327,7 @@ class ModelCallAuditMiddleware(AgentMiddleware):
             return response
 
         finally:
+            reset_run_id(run_id_token)
             _attempt_state.reset(attempt_token)
             _active_call_id.reset(call_token)
 
@@ -330,13 +345,14 @@ class ModelCallAuditMiddleware(AgentMiddleware):
 
         call_token = _active_call_id.set(call_id)
         attempt_token = _attempt_state.set({"count": 0})
+        run_id_token = set_run_id(_context_fields(request)["run_id"])
 
         _emit(
             "model.request",
             request,
             {
                 "model_call_id": call_id,
-                "request": _request_data(request),
+                "request": _safe_snapshot(lambda: _request_data(request)),
             },
             span_id=call_id,
             status="started",
@@ -387,7 +403,7 @@ class ModelCallAuditMiddleware(AgentMiddleware):
                 request,
                 {
                     "model_call_id": call_id,
-                    "response": _response_data(response),
+                    "response": _safe_snapshot(lambda: _response_data(response)),
                 },
                 span_id=call_id,
                 duration_ms=(perf_counter() - started) * 1000,
@@ -396,6 +412,7 @@ class ModelCallAuditMiddleware(AgentMiddleware):
             return response
 
         finally:
+            reset_run_id(run_id_token)
             _attempt_state.reset(attempt_token)
             _active_call_id.reset(call_token)
 
@@ -453,10 +470,12 @@ class ModelAttemptLoggingMiddleware(AgentMiddleware):
         }
 
         if error is not None:
-            payload.update({
-                "error_type": type(error).__name__,
-                "error_message": str(error),
-            })
+            payload.update(
+                {
+                    "error_type": type(error).__name__,
+                    "error_message": str(error),
+                }
+            )
 
         _emit(
             f"model.attempt.{status}",
@@ -476,21 +495,33 @@ class ModelAttemptLoggingMiddleware(AgentMiddleware):
 
         except GraphBubbleUp:
             self._finish(
-                request, attempt, call_id, number, started,
+                request,
+                attempt,
+                call_id,
+                number,
+                started,
                 status="control_flow",
             )
             raise
 
         except asyncio.CancelledError:
             self._finish(
-                request, attempt, call_id, number, started,
+                request,
+                attempt,
+                call_id,
+                number,
+                started,
                 status="cancelled",
             )
             raise
 
         except Exception as exc:
             self._finish(
-                request, attempt, call_id, number, started,
+                request,
+                attempt,
+                call_id,
+                number,
+                started,
                 status="failed",
                 error=exc,
             )
@@ -498,7 +529,11 @@ class ModelAttemptLoggingMiddleware(AgentMiddleware):
 
         else:
             self._finish(
-                request, attempt, call_id, number, started,
+                request,
+                attempt,
+                call_id,
+                number,
+                started,
                 status="completed",
             )
             return response
@@ -511,21 +546,33 @@ class ModelAttemptLoggingMiddleware(AgentMiddleware):
 
         except GraphBubbleUp:
             self._finish(
-                request, attempt, call_id, number, started,
+                request,
+                attempt,
+                call_id,
+                number,
+                started,
                 status="control_flow",
             )
             raise
 
         except asyncio.CancelledError:
             self._finish(
-                request, attempt, call_id, number, started,
+                request,
+                attempt,
+                call_id,
+                number,
+                started,
                 status="cancelled",
             )
             raise
 
         except Exception as exc:
             self._finish(
-                request, attempt, call_id, number, started,
+                request,
+                attempt,
+                call_id,
+                number,
+                started,
                 status="failed",
                 error=exc,
             )
@@ -533,7 +580,11 @@ class ModelAttemptLoggingMiddleware(AgentMiddleware):
 
         else:
             self._finish(
-                request, attempt, call_id, number, started,
+                request,
+                attempt,
+                call_id,
+                number,
+                started,
                 status="completed",
             )
             return response
