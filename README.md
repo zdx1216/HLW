@@ -1,758 +1,360 @@
 # Hermes Local Workbench (HLW)
 
-> A Local-First, Modular and Extensible AI Agent Workbench  
-> 本地优先、模块化、可扩展的智能 Agent 工作台
+> **Local-first · Persistent memory · Modular agents · Observable execution**  
+> 基于本地模型、长期记忆、工具扩展与可追踪执行的模块化 AI Agent 工作台。
 
-**Project:** Hermes Local Workbench  
-**Abbreviation:** HLW  
-**Version:** 0.1.0-dev  
-**Development Status:** Active Development  
-**Primary Language:** Python  
-**Core Framework:** DeepAgents + LangGraph  
-**Local Model Runtime:** Ollama
+**Repository:** [zdx1216/HLW](https://github.com/zdx1216/HLW)  
+**Version:** `0.1.0-dev`（开发版本）  
+**Current milestone:** **P0 核心工程与日志基础完成 → P1 长期记忆集成**  
+**Status date:** 2026-11-07  
+**Primary environment:** Windows · Python 3.11 · uv · Ollama · PostgreSQL · DeepAgents / LangGraph
 
----
+> **状态说明**：本文依据 GitHub `main` 分支提交 `7033f38` 的源码，以及 2026-11-07 的本地验收记录编写。最新本地记录为 **205 passed**、`ruff check .` 通过；这不是 GitHub CI 的实时测试结论。文中严格区分“已有代码”“已验证”“下一阶段计划”。
 
-## 1. 项目定位与总体目标（Project Vision）
+## 1. 项目目标
 
-Hermes Local Workbench（HLW）是一个面向个人及本地化部署场景的模块化 AI Agent 工作台。
+HLW（Hermes Local Workbench）旨在逐步构建一个**本地优先、长期运行、可扩展、可追溯、可控制**的个人 AI Agent 工作平台。它不仅回答问题，还将逐步具备跨会话记忆、工具使用、文档知识检索、任务规划和多 Agent 协作能力。
 
-项目以 DeepAgents 和 LangGraph 为核心框架，以 Ollama 作为本地模型运行环境，通过统一模型网关、长期记忆、Skills、MCP、RAG、多 Agent 协作和安全执行等模块，逐步构建一个具备持续记忆、自主任务处理、工具调用、知识管理和多 Agent 协作能力的本地智能体系统。
+设计目标：
 
-HLW 不仅仅是一个能够进行问答的聊天机器人，而是一个能够持续扩展能力、管理任务、调用工具、积累知识并完成复杂工作的本地 AI Agent 基础设施。
+1. **Local-first**：优先使用 Ollama 本地模型以及本地 PostgreSQL 保存数据。
+2. **Persistent memory**：同时支持会话状态（Checkpoint）和跨会话长期记忆（Store），两者不能混淆。
+3. **Modular architecture**：Agent、模型网关、记忆、工具、API、日志分别管理，尽量避免耦合。
+4. **Resilience**：模型超时、连接失败、重试和备用模型回退具备明确处理路径。
+5. **Observability**：记录用户请求、模型输入输出、工具执行、异常、耗时及追踪 ID。
+6. **Controlled execution**：敏感信息、记忆冲突、外部写入及高风险操作遵循授权与隔离原则。
+7. **Extensibility**：未来逐步接入 Skills、MCP、RAG、Multi-Agent 和 Web UI。
 
-### 1.1 核心目标
+**当前阶段边界**：全链路日志 V1.0 视为已完成的基础设施；当前工作重点转向 **P1 长期记忆集成**。本阶段**不开发模型评分、自动回答质量评估或自动裁判系统**。
 
-项目的长期目标包括以下八个方面：
-
-1. **本地化模型运行（Local Model Runtime）**
-
-   以 Ollama 为本地模型运行基础，统一管理主模型、备用模型及不同模型服务，支持模型切换、异常恢复和本地推理。
-
-2. **持续记忆能力（Persistent Memory）**
-
-   建立短期对话状态与长期用户记忆体系，使 Agent 能够跨会话保存、检索和更新用户偏好、项目背景、工作流程及知识信息。
-
-3. **技能扩展体系（Skills Hub）**
-
-   建立统一的 Skills 管理平台，使 Agent 能够根据任务需要发现、加载和执行不同技能，持续扩展自身能力。
-
-4. **外部工具连接（MCP Gateway）**
-
-   通过 Model Context Protocol（MCP）连接外部工具和服务，实现工具发现、注册、调用及统一管理。
-
-5. **知识管理与检索（Knowledge Engine / RAG）**
-
-   建立文档处理、知识提取、向量检索、混合检索和知识引用体系，使 Agent 能够利用个人资料和专业知识完成任务。
-
-6. **多 Agent 协作（Multi-Agent Engine）**
-
-   建立主 Agent 与专业子 Agent 的任务分配、协同执行、结果汇总和通信机制，并逐步探索 Agent-to-Agent（A2A）通信。
-
-7. **安全执行与可靠性（Security & Reliability）**
-
-   建立工具权限管理、人工审批、执行隔离、异常恢复、运行日志及任务追踪机制，降低自主执行带来的安全风险。
-
-8. **评测与持续优化（Evaluation Center）**
-
-   建立模型、记忆、检索、工具调用及复杂任务的评测体系，通过量化指标和自动化测试持续优化系统能力。
-
-### 1.2 最终愿景
-
-HLW 希望逐步形成以下能力：
-
-- 能够理解用户的长期目标和当前任务。
-- 能够记住用户明确授权保存的信息。
-- 能够根据任务自动选择模型、技能和工具。
-- 能够利用本地文件及知识库完成复杂任务。
-- 能够调用外部服务和 MCP 工具。
-- 能够将复杂任务分配给多个专业 Agent。
-- 能够在必要时请求人工审批。
-- 能够记录任务执行过程并评价最终结果。
-- 能够在本地环境中长期运行和持续扩展。
-
-最终形成一个可持续学习、可扩展、可观察、可控制的个人本地智能工作平台。
-
----
-
-## 2. 技术架构（System Architecture）
-
-HLW 采用分层、模块化架构，核心执行框架为 DeepAgents + LangGraph。
-
-### 2.1 当前架构
+## 2. 当前架构
 
 ```mermaid
-flowchart TD
-    A[User / Client] --> B[FastAPI]
-    B --> C[Agent Service]
-    C --> D[DeepAgents / LangGraph]
-    D --> E[Model Gateway]
-    E --> F[Ollama Primary Model]
-    E --> G[Ollama Fallback Model]
-    D --> H[PostgreSQL Checkpointer]
-    I[Memory Pipeline] --> J[PostgreSQL Store]
-    D -. Future Integration .-> I
-    D -. Future Integration .-> K[Skills Hub]
-    D -. Future Integration .-> L[MCP Gateway]
-    D -. Future Integration .-> M[Knowledge Engine / RAG]
-    D -. Future Integration .-> N[Multi-Agent Engine]
-    N -.-> O[A2A Communication]
-    D -.-> P[Security & Evaluation]
+flowchart TB
+    U[Postman / Client / LangGraph Studio]
+    API[FastAPI / AgentService]
+    DEV[LangGraph Dev]
+    G[DeepAgents + LangGraph 主 Agent]
+    GW[Model Gateway + Retry / Fallback]
+    LM[Ollama Qwen3]
+    CK[PostgreSQL Checkpointer\n会话状态 / thread_id]
+    MT[search_user_memories 工具]
+    MM[MemoryManager + PostgreSQL Store\npgvector / BGE-M3]
+    MP[MemoryExtractor → Validator → Deduplicator → Pipeline\n独立模块已实现；尚待自动集成]
+    LOG[JSONL Event Logging\nAgent / Model / Tool / Error / IDs]
+    U --> API
+    U --> DEV
+    API --> G
+    DEV --> G
+    G --> GW --> LM
+    G --> CK
+    G --> MT --> MM
+    MP -. P1 接入对话处理流程 .-> MM
+    G --> LOG
 ```
 
-说明：
+- **短期对话状态**：由 LangGraph Checkpointer 使用 `thread_id` 持久化，支持会话延续。
+- **长期用户记忆**：由 `MemoryManager` 使用 `("users", user_id, "memories")` 命名空间管理，存储在 PostgreSQL Store 中；通过向量检索跨会话复用。
+- **已有记忆读取入口**：`search_user_memories` 已注册到主 Agent，但调用依赖可信 `user_id`、已配置的 Store 和模型的工具选择；**不等同于每轮自动检索和注入**。
+- **已有记忆写入处理链**：Extractor、Validator、Deduplicator 和 Pipeline 均已有独立实现；**尚未自动挂接到正常 Agent 请求生命周期**。
+- **日志**：API 与 Dev 复用事件结构，但分别写入不同目录。
+
+## 3. 当前进度（截至 2026-11-07）
+
+| 模块                                      | 状态                     | 已实现 / 已验证范围                                          |
+| ----------------------------------------- | ------------------------ | ------------------------------------------------------------ |
+| 工程与依赖管理                            | **已实现**               | `src/hlw`、`pyproject.toml`、`uv.lock`、环境配置             |
+| DeepAgents / LangGraph 主图               | **已实现**               | 统一 Graph 工厂、普通/持久化模式、工具注册                   |
+| AgentService                              | **已实现并测试**         | 异步执行、单用户身份、请求上下文、并发限制、同线程进程内锁   |
+| 模型网关                                  | **已实现并测试**         | Ollama OpenAI 兼容接口、主备模型、超时配置、流式 Token 用量配置 |
+| 模型可靠性                                | **已实现并测试**         | 错误分类、有限重试、退避、备用模型回退                       |
+| PostgreSQL Checkpointer                   | **已实现并做过集成验证** | 会话状态持久化与恢复                                         |
+| PostgreSQL Store / pgvector               | **已实现并做过集成验证** | 长期记忆存储、BGE-M3 Embedding、自然语言语义检索             |
+| MemoryManager                             | **已实现并测试**         | 用户命名空间、CRUD、分类检索、分页和语义检索                 |
+| MemoryExtractor / Validator               | **已实现并测试**         | 结构化候选记忆、原文证据和部分敏感凭证规则                   |
+| MemoryDeduplicator / Pipeline             | **已实现并测试**         | 重复、冲突、授权更新及执行锁；当前主要作为独立组件运行       |
+| Agent 记忆检索工具                        | **已接入主图**           | `search_user_memories`；仍需跨线程与 Dev/API 端到端验收      |
+| API / LangGraph Dev                       | **已实现并验证**         | `/health`、`/chat`、Studio 调试、持久化组件接入              |
+| 结构化日志 V1.0                           | **本阶段完成**           | Agent / Model / Tool、异常、重试、回退、关联 ID、Token、双模式 JSONL |
+| Docker Compose                            | **已实现**               | PostgreSQL + API 编排、数据持久化、健康检查；生产强化尚未完成 |
+| 自动长期记忆闭环                          | **P1 待完成**            | 自动提取、写入策略、跨会话自动检索、冲突确认及故障降级       |
+| Skills / MCP / RAG / Multi-Agent / Web UI | **规划中**               | 尚未形成完整产品能力                                         |
+
+### 3.1 日志系统 V1.0：已完成的范围
+
+**主要事件**：
+
+- `agent.run.started` / `agent.run.completed`：用户输入、最终回答、Agent 总耗时。
+- `model.request` / `model.response`：模型请求、响应消息和可用的 Token 数据。
+- `model.attempt.started` / `model.attempt.completed` / `model.attempt.failed`：每次模型尝试。
+- `model.call.summary`：主备模型、重试次数、回退使用情况和总耗时。
+- `tool.call.started` / `tool.call.completed` / `tool.call.failed`：工具参数、返回值和异常。
+- 取消、控制流等特殊情况保留相应事件或传播行为。
+
+**追踪字段**：
+
+| 字段                         | 语义                                  |
+| ---------------------------- | ------------------------------------- |
+| `user_id`                    | 用户身份；当前是配置驱动的单用户模式  |
+| `thread_id`                  | 会话 ID，供 Checkpointer 恢复历史状态 |
+| `request_id`                 | 单次业务请求的关联标识                |
+| `run_id`                     | 单次 Agent / Graph 根执行 ID          |
+| `trace_id`                   | 同一次请求的整条追踪链                |
+| `span_id` / `parent_span_id` | 模型尝试、工具执行等子步骤的关联      |
+
+**日志路径**：
+
+```text
+logs/api/hlw.log
+logs/api/events.jsonl
+logs/langgraph_dev/hlw.log
+logs/langgraph_dev/events.jsonl
+```
+
+**已记录的验证结果**：
+
+- `uv run ruff check .`：通过。
+- `uv run pytest -q`：**205 passed**（本地运行记录）。
+- Postman API 真实请求：14/14 条事件有 Run ID，且仅有 1 个根 Run ID。
+- LangGraph Dev 真实请求：14/14 条事件有 Run ID，且仅有 1 个根 Run ID。
+- 工具输入和输出字段、Agent 输入和输出字段、模型请求响应已检查存在。
+- Dev 流式模型响应已记录实际 Token 用量。
+- 模拟 JSONL 集成测试：**重试成功、回退成功、主备全部失败**三类场景均通过。
+
+> 以上表示本阶段日志功能验收达标，不意味着在任意生产故障下日志都绝不丢失。日志会记录对话原文，已有脱敏只覆盖部分常见凭证格式，生产部署前仍需完善访问控制、保留周期和敏感数据治理。日志不是自动评分系统。
+
+## 4. 下一阶段：P1 长期记忆集成（当前重点）
+
+### 4.1 P1 的目标
+
+让同一用户在**不同 `thread_id`、不同时间的对话**中，能够可靠地保存、检索、使用、更新和删除长期记忆，并确保历史记忆只是参考数据而非可执行指令。
+
+**最终使用示例**：
+
+- 会话 A：用户明确表达“以后技术学习优先采用目的 → 代码路径 → 原理 → 小测的方式”。
+- 系统根据保存策略提取候选、验证证据、保存到该用户的长期记忆。
+- 会话 B（新 `thread_id`）：用户询问“继续上次的开发课程”。Agent 能检索这条偏好，并在适当条件下用作回答上下文。
+- 用户提出新偏好与旧记忆冲突时，系统不擅自覆盖，必须获得明确确认。
+
+### 4.2 已有基础与尚缺环节
+
+**可以直接复用**：
+
+- `MemoryManager`：保存、读取、修改、删除、列表及语义检索。
+- `MemoryExtractor`：通过模型提取候选记忆，类别为 `preference` / `project` / `workflow` / `fact`。
+- `MemoryValidator`：原文证据校验、重复 key 检测和部分凭证过滤。
+- `MemoryDeduplicator`：新建、重复、冲突与明确授权更新。
+- `MemoryPipeline`：串联 Extractor → Validator → Deduplicator。
+- `open_postgres_store()`：PostgreSQL + pgvector + Ollama BGE-M3。
+- `search_user_memories`：已经注册到 Agent 的检索工具。
+- 单用户 `user_id`、持久化 Runtime、JSONL 关联日志和已有单元/集成测试。
+
+**需要完成**：
+
+- 将 Pipeline 安全地连接到对话流程，并明确何时可以自动写入新记忆。
+- 在用户需要历史信息时，稳定检索并注入相关记忆；区分“模型自选调用工具”和“请求前自动注入”策略。
+- 建立冲突待确认状态及确认/拒绝流程，不能信任客户端随意提交的记忆对象。
+- 验证 API 和 LangGraph Dev 中的 `user_id` 传递及真实 Store 注入。
+- 实现跨 Thread、服务重启、无结果、Store 断连、并发和重复写入的端到端验收。
+- 记录记忆检索、候选提取、拒绝、保存、冲突、确认和删除等事件，但不得将秘密明文输出到日志。
+
+### 4.3 建议实施顺序（小步开发）
+
+| 子阶段              | 目标                                                   | 验收标准                                                     |
+| ------------------- | ------------------------------------------------------ | ------------------------------------------------------------ |
+| **P1.1 现状基线**   | 核查 Store、MemoryManager、检索工具和真实身份上下文    | 同一用户 API/Dev 正确读取测试记忆；不同 `thread_id` 能访问同一用户命名空间 |
+| **P1.2 检索闭环**   | 确定工具触发策略与记忆上下文注入边界                   | 新会话可正确使用相关记忆，空结果不编造历史事实               |
+| **P1.3 写入闭环**   | 把 Pipeline 与请求完成流程集成，明确新记忆写入授权策略 | 从真实消息生成候选、校验、去重、保存；一次性内容不误入长期记忆 |
+| **P1.4 冲突确认**   | 为更新冲突提供可信的待确认记录和用户操作接口           | 未确认不覆盖；确认仅作用于指定候选；并发/重复确认安全        |
+| **P1.5 异常与审计** | 隔离 Store/Embedding/Extractor 故障，补充记忆事件日志  | 记忆异常不污染主 Agent；日志可用 Request ID / Run ID 追踪    |
+| **P1.6 端到端验收** | 跨会话、重启、删除、隔离及故障恢复测试                 | Ruff 与 Pytest 通过，Postman 和 Studio 真实验证，文档同步    |
 
-- 当前 Agent 主链路已经接入模型网关和 PostgreSQL Checkpointer。
-- 长期记忆模块已经具备独立实现，但尚未完整接入主 Agent。
-- Skills、MCP、RAG、多 Agent 等属于后续扩展方向。
+> **实施边界**：当前为单用户模式，暂不将“多用户登录/完整鉴权系统”混入 P1 第一轮，但不得把客户端任意提供的 `user_id` 当作可信身份。需要多用户时，再补认证、会话所有权与用户隔离控制。
 
-### 2.2 技术栈
+### 4.4 P1 完成的定义（Definition of Done）
 
-| 技术 | 用途 |
-|---|---|
-| Python 3.11+ | 核心开发语言 |
-| DeepAgents | Agent 核心框架 |
-| LangGraph | Agent 工作流与状态管理 |
-| LangChain | 模型接口及工具生态 |
-| Ollama | 本地大模型运行 |
-| Qwen3 | 当前主模型与备用模型 |
-| PostgreSQL | 对话状态与长期记忆持久化 |
-| psycopg | PostgreSQL 异步数据库连接 |
-| FastAPI | HTTP API 服务 |
-| Pydantic | 数据结构与输入校验 |
-| Docker | 应用容器化 |
-| Docker Compose | 多服务编排 |
-| uv | Python 环境及依赖管理 |
-| pytest | 自动化测试 |
-| Ruff | 代码质量检查 |
-| LangGraph Studio | Agent 工作流可视化与调试 |
+- [ ] 用户的新会话能够获取已保存且相关的长期记忆。
+- [ ] 不同 `thread_id` 共享同一 `user_id` 的长期记忆，但不混淆对话 Checkpoint。
+- [ ] 无相关记忆时明确返回空结果，不杜撰历史。
+- [ ] 候选记忆有原文证据、敏感信息过滤和明确保存规则。
+- [ ] 重复记忆不重复保存；冲突记忆在确认之前不覆盖。
+- [ ] 用户能查看、更新与删除自己的记忆。
+- [ ] PostgreSQL / Ollama / Embedding 异常时行为可控，并保留诊断事件。
+- [ ] API、Dev、PostgreSQL 实际联调通过；单元和集成测试通过。
+- [ ] 更新 `README.md` 与 `get_project_status()`，避免进度描述不一致。
 
----
+## 5. 后续路线图
 
-## 3. 当前开发进度（Current Development Status）
+| 里程碑 | 方向                                                       | 状态                         |
+| ------ | ---------------------------------------------------------- | ---------------------------- |
+| **P0** | 工程底座、模型可靠性、PostgreSQL、API/Dev、结构化日志 V1.0 | **核心完成**                 |
+| **P1** | 长期记忆读取、写入、确认、跨会话集成                       | **下一阶段**                 |
+| **P2** | Skills Hub：技能发现、注册、加载和执行                     | 规划                         |
+| **P3** | MCP Gateway：工具发现、连接、权限和调用                    | 规划                         |
+| **P4** | Knowledge Engine / RAG：文档解析、索引、混合检索和引用     | 规划                         |
+| **P5** | Multi-Agent / A2A：子 Agent 任务分配与协同                 | 规划                         |
+| **P6** | 安全审批、受控执行、用户权限和隔离                         | 规划；部分基础控制已存在     |
+| **P7** | 独立评测中心与持续优化                                     | 远期规划；**当前阶段不实施** |
+| **P8** | 完整 Web UI、任务与记忆管理、部署产品化                    | 规划                         |
 
-截至 2026-11-04，HLW 已经完成第一阶段核心工程基础的主要建设，正在从基础 Agent 运行框架向完整的模块化 Agent 系统过渡。
+## 6. 本地开发与运行
 
-### 3.1 已实现的核心模块
+### 6.1 环境准备
 
-#### 3.1.1 项目基础结构（Project Foundation）
+- Python **3.11**（项目要求 `>=3.11`，当前主要按 3.11 验证）。
+- [uv](https://docs.astral.sh/uv/)、Ollama、PostgreSQL（含 pgvector）。
+- 模型示例：`qwen3:8b`（主模型）、`qwen3:14b`（备用）、`bge-m3:latest`（Embedding）。名称可通过环境变量修改。
 
-已完成：
+```powershell
+uv sync
+uv run ruff check .
+uv run pytest -q
+```
 
-- Python 项目基础结构。
-- `pyproject.toml` 项目依赖管理。
-- 环境变量与配置管理。
-- 统一日志系统。
-- 请求上下文管理。
-- 基础模块划分。
-- 基础异常处理机制。
+### 6.2 配置 `.env`
 
-#### 3.1.2 Agent 核心引擎（Agent Core）
+在项目根目录自行创建 `.env`，不要提交真实凭据。下列为**本机开发示例**，请按环境修改：
 
-已完成：
+```dotenv
+HLW_ENV=development
+HLW_USER_ID=local_user
 
-- 基于 DeepAgents 创建主 Agent。
-- 基于 LangGraph 构建 Agent 执行图。
-- 统一 Agent Graph 入口。
-- Agent 异步执行服务。
-- 请求 ID 与 Thread ID 管理。
-- Agent 并发执行限制。
-- 相同 Thread ID 的进程内串行执行控制。
-- PostgreSQL 持久化 Agent Runtime。
+HLW_CHAT_MODEL=qwen3:8b
+HLW_FALLBACK_MODEL=qwen3:14b
+HLW_OLLAMA_BASE_URL=http://127.0.0.1:11434/v1
+HLW_MODEL_TIMEOUT_SECONDS=120
 
-核心文件：
+HLW_EMBEDDING_MODEL=bge-m3:latest
+HLW_OLLAMA_EMBEDDING_BASE_URL=http://127.0.0.1:11434
+HLW_EMBEDDING_DIMENSIONS=1024
 
-- `src/hlw/agent/graph.py`
-- `src/hlw/agent/service.py`
-- `src/hlw/agent/persistent_runtime.py`
+HLW_DB_HOST=127.0.0.1
+HLW_DB_PORT=5432
+HLW_DB_NAME=hlw
+HLW_DB_USER=hlw
+HLW_DB_PASSWORD=REPLACE_WITH_LOCAL_PASSWORD
 
-#### 3.1.3 模型网关（Model Gateway）
+HLW_LOG_LEVEL=INFO
+```
 
-已完成：
+当前 `.gitignore` 已排除 `.env`、`data/`、`logs/` 和虚拟环境。请勿将完整对话日志或凭证提交到公开仓库。
 
-- 统一模型注册和客户端创建。
-- 主模型与备用模型配置。
-- 基于 OpenAI 兼容接口连接 Ollama。
-- 模型超时配置。
-- 主备模型隔离配置。
+### 6.3 启动 API
 
-当前默认模型配置：
-
-| 模型角色 | 模型 |
-|---|---|
-| Primary | qwen3:8b |
-| Fallback | qwen3:14b |
+```powershell
+uv run python scripts/run_api.py
+```
 
-模型通过统一 Gateway 创建，避免业务模块直接依赖具体模型客户端。
+- `GET http://127.0.0.1:8000/health`
+- `POST http://127.0.0.1:8000/chat`
 
-核心文件：
+Postman 请求示例：
 
-- `src/hlw/models/gateway.py`
+```json
+{
+  "message": "请调用 get_project_status，告诉我当前开发阶段。",
+  "thread_id": "demo-thread-001",
+  "request_id": "demo-request-001"
+}
+```
 
-#### 3.1.4 模型可靠性与故障恢复（Resilience）
+成功的聊天响应包含 `thread_id`、`request_id` 和 `answer`。`request_id` 为业务请求标识；运行时还有独立的根 `run_id`。
 
-已完成：
+### 6.4 启动 LangGraph Dev
 
-- 模型错误分类。
-- 网络连接错误识别。
-- 超时错误识别。
-- HTTP 429 限流识别。
-- HTTP 5xx 服务端错误识别。
-- 有限次数重试。
-- 指数退避。
-- 主模型失败后自动切换备用模型。
-- 模型调用结果遥测记录。
-- JSON 格式模型调用日志。
+```powershell
+uv run langgraph dev
+```
 
-当前 Agent 主图配置为最多重试 2 次，重试耗尽后调用备用模型。
+选择 `hlw_core` Graph。配置位于 `langgraph.json`；Dev 使用自己的运行入口和独立日志目录。若记忆检索工具报 `user_id` 不存在，应先检查 Dev 运行上下文，不要用匿名身份代替。
 
-核心文件：
+### 6.5 Docker Compose
 
-- `src/hlw/models/errors.py`
-- `src/hlw/models/resilience.py`
-- `src/hlw/models/telemetry.py`
+```powershell
+docker compose up -d --build
+docker compose ps
+docker compose logs -f api
+```
 
-#### 3.1.5 PostgreSQL 对话持久化（Checkpoint Persistence）
+`compose.yaml` 定义 PostgreSQL + FastAPI 服务，Ollama 运行在宿主机。容器通过 `host.docker.internal` 访问宿主机模型服务。Docker 部署学习手册当前在 [`docs/writing-block.md`](docs/writing-block.md)（建议后续改名为 `docs/docker-deployment-guide.md`）。
 
-已完成：
+### 6.6 测试分层
 
-- PostgreSQL Checkpointer 连接管理。
-- 异步数据库生命周期管理。
-- LangGraph Checkpointer 初始化。
-- 按 Thread ID 保存对话状态。
-- 不同 Thread ID 的状态隔离。
-- 服务重新连接后恢复历史对话。
-- 持久化 Agent Runtime。
+```powershell
+# 无需真实 Ollama/数据库的单元与模拟集成测试
+uv run pytest -q
 
-核心文件：
+# PostgreSQL + pgvector 的单独联调脚本
+uv run python scripts/check_memory_semantic_search_postgres.py
 
-- `src/hlw/memory/checkpoints_postgres.py`
-- `src/hlw/agent/persistent_runtime.py`
+# 当前受控回退机制的实际模型联调脚本
+uv run python scripts/check_controlled_fallback.py
+```
 
-#### 3.1.6 长期记忆模块（Memory System）
+`scripts/check_*.py` 可能需要真实服务，并可能执行测试数据的临时写入与清理，运行前请检查目标数据库。一般单元测试不会替代 PostgreSQL / Ollama 的真实联调。
 
-已完成独立模块的主要代码实现：
-
-**MemoryExtractor**
-- 使用 LLM 结构化提取候选记忆。
-- 支持 preference、project、workflow、fact 四种类别。
-- 检查候选记忆的原文证据。
-- 过滤重复 key。
-
-**MemoryValidator**
-- 检查记忆证据。
-- 检查部分常见敏感凭证格式。
-- 过滤重复候选记忆。
-
-**MemoryDeduplicator**
-- 检查已有记忆。
-- 识别重复内容。
-- 检测新旧记忆冲突。
-- 未经明确授权不覆盖旧记忆。
-- 支持明确授权后的记忆更新。
-
-**MemoryManager**
-- 保存记忆。
-- 读取记忆。
-- 按类别检索记忆。
-- 更新记忆。
-- 删除记忆。
-- 按用户 ID 构建独立命名空间。
-
-**MemoryPipeline**
-- 协调 Extractor、Validator 和 Deduplicator。
-- 统一处理候选记忆。
-- 支持用户明确授权后的记忆更新。
-
-**PostgreSQL Store**
-- 已实现异步 PostgreSQL Store 适配器。
-- 支持长期记忆的持久化管理。
-
-核心文件：
-
-- `src/hlw/memory/extractor.py`
-- `src/hlw/memory/validator.py`
-- `src/hlw/memory/deduplicator.py`
-- `src/hlw/memory/manager.py`
-- `src/hlw/memory/pipeline.py`
-- `src/hlw/memory/store_postgres.py`
-- `src/hlw/memory/schemas.py`
-
-**当前限制：**
-
-长期记忆模块目前主要以独立组件形式存在，尚未完整接入主 Agent 请求链路。
-
-目前主 Agent 尚未实现自动检索长期记忆、跨会话上下文注入和完整的记忆确认交互。因此，记忆模块的代码实现不等于已经具备完整的 Agent 长期记忆能力。
-
-#### 3.1.7 FastAPI 服务（API Layer）
-
-已实现基础 HTTP API：
-
-- `GET /health`：应用存活检查。
-- `POST /chat`：提交 Agent 对话请求。
-- 自动生成 Request ID。
-- 自动生成 Thread ID。
-- 常驻 AgentService 生命周期管理。
-- 接入 PostgreSQL 持久化运行时。
-
-核心文件：
-
-- `src/hlw/api/app.py`
-- `scripts/run_api.py`
-
-当前限制：
-
-- 尚未建立完整的用户身份认证。
-- 尚未贯通 API 用户身份与长期记忆 user_id。
-- 尚未实现完整的会话所有权控制。
-- 尚未形成完整的 Web UI。
-
-#### 3.1.8 Docker 部署基础（Deployment Foundation）
-
-已实现：
-
-- Dockerfile。
-- Docker Compose 编排。
-- PostgreSQL 16 容器配置。
-- FastAPI 应用容器配置。
-- PostgreSQL 健康检查。
-- API 健康检查。
-- 数据卷持久化。
-- Ollama 宿主机连接配置。
-- 本机回环地址端口绑定。
-
-相关文件：
-
-- `Dockerfile`
-- `compose.yaml`
-
-当前配置采用单 Worker 运行方式。由于并发锁目前属于进程内锁，多 Worker 和多实例部署前仍需完善跨进程协调机制。
-
-#### 3.1.9 LangGraph 开发与可视化
-
-已建立 `langgraph.json`，包含：
-
-- `hlw_core` 主 Agent Graph。
-- `hlw_fallback_probe` 模型回退测试图。
-- PostgreSQL Checkpointer 配置。
-
-后续开发默认采用：
-
-- `langgraph dev`
-- LangGraph Studio
-- Graph 可视化调试
-- Graph 配置与源码同步管理
-
----
-
-### 3.2 测试与验证进度（Testing & Verification）
-
-仓库已建立单元测试及 PostgreSQL 集成测试脚本。
-
-当前覆盖的测试方向包括：
-
-- Agent Graph 创建。
-- Agent Service 请求上下文。
-- Agent 并发控制。
-- Thread ID 串行执行。
-- 模型错误分类。
-- 模型重试与回退。
-- MemoryExtractor。
-- MemoryValidator。
-- MemoryManager。
-- MemoryDeduplicator。
-- MemoryPipeline。
-- Memory 并发锁。
-- PostgreSQL Store。
-- PostgreSQL Checkpointer。
-- 跨服务生命周期的对话恢复。
-
-仓库中的项目状态工具记录了最近一次报告为 38 项测试通过、Ruff 检查通过，以及若干 PostgreSQL 和模型调用冒烟测试通过。
-
-注意：上述是已有测试记录，并非对当前最新提交重新执行后的验收结论。后续版本发布前应重新运行完整测试及集成验证。
-
----
-
-## 4. 当前主要问题与待完善事项（Current Gaps）
-
-目前项目已经有较完整的基础模块，但距离最终目标仍有以下差距：
-
-| 问题 | 当前情况 | 后续要求 |
-|---|---|---|
-| 长期记忆集成 | 已有独立模块 | 接入 Agent 主流程 |
-| 用户身份体系 | API 暂无 user_id | 建立认证和用户隔离 |
-| 记忆自动检索 | 尚未接入 | 实现跨会话检索与注入 |
-| 记忆授权交互 | 有独立更新接口 | 建立完整审批流程 |
-| Skills Hub | 尚未实现 | 建立技能注册和执行体系 |
-| MCP Gateway | 尚未实现 | 建立外部工具连接体系 |
-| RAG | 尚未实现 | 建立知识导入和检索体系 |
-| Multi-Agent | 尚未实现 | 建立多 Agent 协作 |
-| A2A | 尚未实现 | 建立 Agent 间通信 |
-| 安全执行 | 尚未形成完整体系 | 权限、审批和沙箱 |
-| Evaluation Center | 尚未实现 | 建立系统评测 |
-| Web UI | 尚未实现 | 建立可视化交互界面 |
-| 多进程并发 | 当前使用进程内锁 | 支持分布式协调 |
-
-另外，当前 `get_project_status()` 中的静态项目状态尚未完全同步到最新代码，例如部分已经存在的 Memory 和 FastAPI 代码仍被标记为规划功能。后续应统一项目状态管理，避免 Agent 根据过时信息报告开发进度。
-
----
-
-## 5. 未来开发路线图（Development Roadmap）
-
-后续开发遵循先完善基础设施、再扩展能力模块、最后形成完整工作平台的原则。
-
-### P0：核心工程基础完善（Foundation Hardening）
-
-**目标：让现有代码形成稳定、可维护、可重复验证的基础系统。**
-
-主要任务：
-
-- 完善项目结构与模块边界。
-- 统一项目状态管理。
-- 同步 `get_project_status()` 与真实代码。
-- 完善模型网关和故障恢复。
-- 完善 PostgreSQL 持久化。
-- 完善 API 生命周期和错误处理。
-- 补齐核心模块集成测试。
-- 完善 Docker 部署与运行验证。
-- 完善日志、异常和请求追踪。
-- 维护 LangGraph Studio 开发配置。
-
-验收标准：
-
-- Agent 能够稳定调用本地模型。
-- 主模型失败时能够自动切换备用模型。
-- 对话可以跨服务生命周期恢复。
-- API 能够稳定提供 Agent 服务。
-- 核心测试能够重复通过。
-
-### P1：长期记忆系统完整集成（Persistent Memory Integration）
-
-**目标：使 Agent 真正具备跨会话的持续记忆能力。**
-
-主要任务：
-
-1. 建立用户身份与 user_id 体系。
-2. 实现用户和会话的访问权限校验。
-3. 将 MemoryPipeline 接入 Agent 请求生命周期。
-4. 实现候选记忆自动提取。
-5. 实现记忆证据校验和敏感信息过滤。
-6. 实现记忆新增、重复识别和冲突检测。
-7. 实现明确授权后的记忆更新。
-8. 实现 PostgreSQL 长期记忆保存。
-9. 实现 Agent 调用前的长期记忆检索。
-10. 将相关记忆注入 Agent 上下文。
-11. 支持不同 Thread ID 之间共享同一用户的长期记忆。
-12. 建立记忆删除、更新和审计机制。
-
-验收标准：
-
-- 用户在一个会话中表达的长期偏好，可以在另一个会话中被正确检索。
-- 不同用户的记忆严格隔离。
-- 未经授权不得覆盖已有记忆。
-- 记忆提取错误不能直接污染长期记忆。
-- 记忆模块能够在 PostgreSQL 中长期保存并恢复。
-
-### P2：Skills Hub（技能管理平台）
-
-**目标：让 Agent 能够根据任务动态扩展和使用技能。**
-
-主要任务：
-
-- 设计统一 Skill 规范。
-- 建立 Skill 注册中心。
-- 支持 Skill 自动发现。
-- 支持 Skill 加载和卸载。
-- 支持 Skill 版本管理。
-- 支持 Skill 元数据与说明文件。
-- 支持 Skill 调用和执行结果验证。
-- 建立 Skill 权限管理。
-- 建立 Skill 执行日志。
-- 支持用户自定义技能。
-
-预期能力：
-
-Agent 能够识别任务需要的技能，并根据权限和任务要求选择合适的 Skill，而不是将所有能力写死在主 Agent 中。
-
-### P3：MCP Gateway（外部工具连接）
-
-**目标：建立统一的外部工具接入和管理体系。**
-
-主要任务：
-
-- MCP Server 注册与管理。
-- MCP Client 生命周期管理。
-- 工具自动发现。
-- 工具名称和参数规范化。
-- 工具调用与结果返回。
-- 连接超时和异常恢复。
-- 工具访问权限管理。
-- 工具白名单。
-- 工具调用日志。
-- 与 Skills Hub 和主 Agent 集成。
-
-预期能力：
-
-Agent 能够通过统一 MCP Gateway 使用外部工具，而不需要为每一个外部服务单独编写底层连接逻辑。
-
-### P4：Knowledge Engine / RAG（知识管理系统）
-
-**目标：让 Agent 能够利用本地文档和专业知识完成复杂任务。**
-
-主要任务：
-
-- 文档上传和导入。
-- PDF、Word、Markdown 等格式解析。
-- 文档切分。
-- Embedding 模型接入。
-- 向量数据库。
-- 向量检索。
-- 关键词检索。
-- 混合检索。
-- Reranker 重排序。
-- 知识引用与来源追踪。
-- 用户级和项目级知识隔离。
-- 知识更新与删除。
-
-预期能力：
-
-用户能够将自己的项目资料、技术文档、论文、代码说明等纳入知识库，Agent 可以根据问题检索相关内容并提供可追溯的回答。
-
-### P5：Multi-Agent Engine（多 Agent 协作引擎）
-
-**目标：从单 Agent 执行模式升级为多 Agent 协作模式。**
-
-主要任务：
-
-- 主 Agent 与子 Agent 架构。
-- 专业 Agent 注册和管理。
-- 子 Agent 角色定义。
-- 复杂任务拆分。
-- 任务分配。
-- Agent 间消息传递。
-- 共享任务状态。
-- 子任务结果汇总。
-- 失败重试与任务恢复。
-- Agent 执行追踪。
-- Agent-to-Agent（A2A）通信机制。
-
-预期能力：
-
-用户提交一个复杂任务后，主 Agent 能够将任务拆分并分配给不同专业 Agent，最后整合结果。
-
-例如：
-
-- Research Agent：资料搜索与研究。
-- Coding Agent：代码编写与调试。
-- Data Agent：数据分析。
-- Document Agent：文档生成。
-- Review Agent：质量检查。
-
-### P6：安全执行体系（Security & Controlled Execution）
-
-**目标：保证 Agent 在具有自主执行能力的同时，仍然受到明确的权限约束。**
-
-主要任务：
-
-- 用户身份认证。
-- 工具权限分级。
-- 文件系统访问控制。
-- 网络访问控制。
-- 敏感信息保护。
-- 人工审批机制。
-- 危险操作二次确认。
-- 安全执行沙箱。
-- 命令执行隔离。
-- 操作审计。
-- 异常行为检测。
-
-基本原则：
-
-Agent 可以提出执行操作，但涉及敏感数据、重要文件、外部系统写入或高风险命令时，应根据权限策略要求审批或拒绝执行。
-
-### P7：Evaluation Center（评测与优化中心）
-
-**目标：建立可量化、可重复的 Agent 质量评估体系。**
-
-主要任务：
-
-- 模型回答质量评测。
-- 工具调用成功率评测。
-- 任务完成率评测。
-- 记忆准确率评测。
-- 记忆检索质量评测。
-- RAG 检索质量评测。
-- 多 Agent 协作效果评测。
-- 模型回退成功率统计。
-- 请求延迟统计。
-- 资源消耗统计。
-- 自动化回归测试。
-- 测试数据集管理。
-
-重点指标包括：
-
-| 指标 | 评估目的 |
-|---|---|
-| Task Success Rate | 任务完成率 |
-| Tool Success Rate | 工具调用成功率 |
-| Memory Accuracy | 记忆准确性 |
-| Retrieval Precision | 检索精确率 |
-| Retrieval Recall | 检索召回率 |
-| Fallback Success Rate | 模型回退成功率 |
-| Latency | 响应延迟 |
-| Error Rate | 系统错误率 |
-
-### P8：完整 API、Web UI 与部署（Productization）
-
-**目标：形成完整、可长期运行的本地 AI Agent 工作平台。**
-
-主要任务：
-
-- 完善 FastAPI 服务。
-- 增加身份认证。
-- 支持流式输出。
-- 建立任务管理接口。
-- 建立会话管理接口。
-- 建立记忆管理接口。
-- 建立 Skills 管理接口。
-- 建立 MCP 管理接口。
-- 开发 Web UI。
-- 支持任务执行过程可视化。
-- 支持多 Agent 工作流可视化。
-- 支持运行日志查看。
-- 完善 Docker Compose。
-- 建立数据库备份和恢复机制。
-- 完善部署与升级流程。
-
-最终形成一个可以通过浏览器访问、能够管理任务、技能、记忆、知识库和多个 Agent 的本地智能工作平台。
-
----
-
-## 6. 核心开发原则（Engineering Principles）
-
-整个 HLW 项目遵循以下原则：
-
-### 6.1 Local-First
-
-优先使用本地模型、本地数据和本地数据库，减少对外部云端模型服务的依赖。
-
-### 6.2 Modular Architecture
-
-每项能力应当具有清晰的模块边界，通过接口和依赖注入进行组合，避免形成庞大的单体 Agent。
-
-### 6.3 Persistent by Design
-
-重要对话状态、长期记忆、任务状态和执行结果应当具备明确的持久化策略。
-
-### 6.4 Security by Design
-
-安全控制应当贯穿模型、记忆、文件、工具和 Agent 执行过程，而不是在系统完成后再补充。
-
-### 6.5 Observable and Testable
-
-每个核心模块都应当具备日志、异常处理和自动化测试，避免仅凭一次成功运行判断功能已经完成。
-
-### 6.6 Evidence-Based Development
-
-严格区分：
-
-- **Implemented：** 已有代码实现。
-- **Verified：** 已通过对应测试或运行验收。
-- **In Progress：** 已开始开发，但集成或验收尚未完成。
-- **Planned：** 尚未开始实现。
-
-代码存在不等于功能完整，单元测试通过也不等于生产环境验收通过。
-
-### 6.7 Human-in-the-Loop
-
-对于重要记忆更新、敏感数据操作和高风险工具调用，应保留必要的人工确认机制。
-
----
-
-## 7. 项目当前阶段总结（Current Milestone）
-
-当前 HLW 已经具备：
-
-- DeepAgents + LangGraph 主 Agent 基础。
-- Ollama 本地模型网关。
-- 主模型与备用模型机制。
-- 模型重试、故障分类和遥测。
-- Agent 异步服务和并发控制。
-- PostgreSQL 对话状态持久化。
-- 独立长期记忆管理与处理模块。
-- FastAPI 基础服务。
-- Docker 和 Docker Compose 部署配置。
-- LangGraph Studio 开发配置。
-- 核心单元测试及 PostgreSQL 集成测试脚本。
-
-目前最重要的工作不是继续堆积功能，而是将已经实现的模块连接起来，建立完整的运行闭环。
-
-**下一阶段首要任务：完成用户身份体系，并将长期记忆模块真正集成到主 Agent，实现跨会话记忆检索、上下文注入和授权更新。**
-
-在此基础上，依次建设 Skills Hub、MCP Gateway、Knowledge Engine、Multi-Agent Engine、安全执行体系和 Evaluation Center。
-
-HLW 的最终目标是：
-
-**构建一个以本地模型为基础、以长期记忆为核心、以 Skills 和 MCP 为扩展能力、以 RAG 和 Multi-Agent 为高级执行能力、以安全与评测为保障的完整个人 AI Agent 工作平台。**
-
----
-
-## 8. Repository Structure
+## 7. 主要仓库结构
 
 ```text
 HLW/
-│
-├── src/
-│   └── hlw/
-│       ├── agent/
-│       │   ├── graph.py
-│       │   ├── service.py
-│       │   └── persistent_runtime.py
-│       │
-│       ├── api/
-│       │   └── app.py
-│       │
-│       ├── core/
-│       │   ├── config.py
-│       │   ├── concurrency.py
-│       │   ├── thread_locks.py
-│       │   └── request_context.py
-│       │
-│       ├── memory/
-│       │   ├── checkpoints_postgres.py
-│       │   ├── store_postgres.py
-│       │   ├── extractor.py
-│       │   ├── validator.py
-│       │   ├── deduplicator.py
-│       │   ├── manager.py
-│       │   ├── pipeline.py
-│       │   └── schemas.py
-│       │
-│       ├── models/
-│       │   ├── gateway.py
-│       │   ├── errors.py
-│       │   ├── resilience.py
-│       │   └── telemetry.py
-│       │
-│       └── tools/
-│           └── project_tools.py
-│
-├── tests/
-│   └── unit/
-│
-├── scripts/
-│
+├── src/hlw/
+│   ├── agent/
+│   │   ├── graph.py                       # 统一 Agent Graph / Middleware
+│   │   ├── service.py                     # 请求上下文与异步执行
+│   │   ├── persistent_runtime.py          # Checkpointer + Store 生命周期
+│   │   ├── langgraph_dev.py              # Studio/Dev 入口
+│   │   ├── execution_observability.py     # Agent 生命周期日志
+│   │   ├── model_observability.py         # 模型调用与尝试日志
+│   │   ├── tool_observability.py          # 工具日志
+│   │   └── request_context_middleware.py # 请求上下文关联
+│   ├── api/app.py                         # FastAPI /health /chat
+│   ├── core/
+│   │   ├── config.py                      # 环境变量配置
+│   │   ├── identity.py                    # 单用户 ID 规范化
+│   │   ├── request_context.py             # Request/Run ID 上下文
+│   │   ├── event_logger.py                # JSONL 结构化事件与脱敏
+│   │   └── logging_config.py             # API/Dev 日志目录和轮转
+│   ├── models/
+│   │   ├── gateway.py                     # 模型创建与流式 usage
+│   │   ├── errors.py                      # 错误分类
+│   │   ├── resilience.py                  # 重试和回退
+│   │   └── telemetry.py                   # 模型汇总日志
+│   ├── memory/
+│   │   ├── checkpoints_postgres.py        # 会话状态
+│   │   ├── store_postgres.py              # 长期记忆 Store + 向量索引
+│   │   ├── manager.py                     # CRUD / 语义检索
+│   │   ├── extractor.py                   # 候选记忆提取
+│   │   ├── validator.py                   # 原文证据/敏感信息规则
+│   │   ├── deduplicator.py                # 去重/冲突/确认更新
+│   │   ├── execution_locks.py             # 记忆并发锁
+│   │   ├── pipeline.py                    # 独立记忆流水线
+│   │   └── schemas.py                     # Pydantic 数据结构
+│   └── tools/
+│       ├── memory_tools.py               # Agent 长期记忆检索工具
+│       └── project_tools.py              # 项目状态查询工具
+├── tests/unit/                           # 单元与模拟集成测试
+├── scripts/                              # 真实服务联调、冒烟和启动脚本
+├── docs/                                 # 部署说明与示意图
+├── workspace/input/.gitkeep
+├── workspace/output/.gitkeep
+├── langgraph.json
 ├── Dockerfile
 ├── compose.yaml
-├── langgraph.json
 ├── pyproject.toml
 ├── uv.lock
 └── README.md
 ```
 
+## 8. 工程约束与维护约定
+
+1. **不把代码存在等同于端到端完成**。按 Implemented（已有代码）、Verified（有测试证据）、In Progress（集成中）、Planned（规划）区分状态。
+2. **及时维护项目状态**。`src/hlw/tools/project_tools.py` 中的阶段、已实现能力及测试记录目前存在旧信息；进入 P1 前应同步，否则 Agent 会报告旧开发进度。不要让每次项目状态查询自动运行全量测试。
+3. **日志已成为正式基础设施**。新 Memory/Skills/MCP 等模块复用现有事件模式和 ID 关联；不应擅自记录密码、原始密钥、隐私敏感内容。
+4. **长期记忆必须尊重证据和授权**。历史记忆只作参考信息，不能视为系统指令。新记忆保存策略须明确；冲突覆盖需要显式确认。
+5. **单用户不等于已完成多用户鉴权**。未来扩展多用户时需要会话所有权验证和跨用户严格隔离。
+6. **进程内锁不等于分布式锁**。当前单 Worker 运行更符合现有并发模型；扩容前需重新设计跨进程协调。
+7. **删除文件前检查引用并回归测试**。`runtime_probe.py` 属于临时诊断文件；早期 `check_model_fallback.py` 使用非当前的内置回退机制，均可在确认不再引用后清理。记忆脚本、正式日志模块和自动化测试应保留。
+
 ---
 
-**Project:** Hermes Local Workbench (HLW)  
-**Repository:** https://github.com/zdx1216/HLW  
-**Development Approach:** Incremental Development + Modular Architecture + Continuous Testing  
-**Status:** Active Development
+**当前阶段结论**：P0 的 Agent 基础、模型重试回退、PostgreSQL、API/Dev 与日志 V1.0 已形成可工作的基础；P1 应在现有 Memory 模块上完成**检索 → 提取 → 校验 → 去重 → 保存/确认 → 跨会话使用**的完整闭环，不重复造轮子。
