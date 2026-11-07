@@ -1,4 +1,3 @@
-
 """HLW MemoryPipeline 单元测试。"""
 
 import pytest
@@ -83,11 +82,7 @@ async def test_pipeline_create_memory() -> None:
 
     candidate = make_candidate()
 
-    pipeline, manager = build_pipeline(
-        MemoryExtractionResult(
-            candidates=[candidate]
-        )
-    )
+    pipeline, manager = build_pipeline(MemoryExtractionResult(candidates=[candidate]))
 
     result = await pipeline.run(
         user_id="user_001",
@@ -97,10 +92,7 @@ async def test_pipeline_create_memory() -> None:
     assert len(result.extraction.candidates) == 1
     assert len(result.validation.accepted) == 1
 
-    assert (
-        result.deduplication_results[0].status
-        == "created"
-    )
+    assert result.deduplication_results[0].status == "created"
 
     saved = await manager.get_memory(
         "user_001",
@@ -115,9 +107,7 @@ async def test_pipeline_create_memory() -> None:
 async def test_pipeline_empty_extraction() -> None:
     """没有候选记忆时，不应该执行数据库写入。"""
 
-    pipeline, _ = build_pipeline(
-        MemoryExtractionResult()
-    )
+    pipeline, _ = build_pipeline(MemoryExtractionResult())
 
     result = await pipeline.run(
         user_id="user_001",
@@ -133,15 +123,9 @@ async def test_pipeline_empty_extraction() -> None:
 async def test_pipeline_reject_invalid_evidence() -> None:
     """证据不在原文中，应该被 Validator 拒绝。"""
 
-    candidate = make_candidate(
-        evidence="我喜欢英文注释"
-    )
+    candidate = make_candidate(evidence="我喜欢英文注释")
 
-    pipeline, _ = build_pipeline(
-        MemoryExtractionResult(
-            candidates=[candidate]
-        )
-    )
+    pipeline, _ = build_pipeline(MemoryExtractionResult(candidates=[candidate]))
 
     result = await pipeline.run(
         user_id="user_001",
@@ -151,10 +135,7 @@ async def test_pipeline_reject_invalid_evidence() -> None:
     assert len(result.validation.accepted) == 0
     assert len(result.validation.rejected) == 1
 
-    assert (
-        result.validation.rejected[0].reason
-        == "evidence_not_found"
-    )
+    assert result.validation.rejected[0].reason == "evidence_not_found"
 
     assert result.deduplication_results == []
 
@@ -165,11 +146,7 @@ async def test_pipeline_unchanged_memory() -> None:
 
     candidate = make_candidate()
 
-    pipeline, manager = build_pipeline(
-        MemoryExtractionResult(
-            candidates=[candidate]
-        )
-    )
+    pipeline, manager = build_pipeline(MemoryExtractionResult(candidates=[candidate]))
 
     await manager.save_memory(
         user_id="user_001",
@@ -183,25 +160,16 @@ async def test_pipeline_unchanged_memory() -> None:
         user_message="以后请提供详细的中文代码注释。",
     )
 
-    assert (
-        result.deduplication_results[0].status
-        == "unchanged"
-    )
+    assert result.deduplication_results[0].status == "unchanged"
 
 
 @pytest.mark.anyio
 async def test_pipeline_memory_conflict() -> None:
     """新旧记忆不一致时，不应该擅自覆盖。"""
 
-    candidate = make_candidate(
-        content="喜欢详细且规范的中文代码注释"
-    )
+    candidate = make_candidate(content="喜欢详细且规范的中文代码注释")
 
-    pipeline, manager = build_pipeline(
-        MemoryExtractionResult(
-            candidates=[candidate]
-        )
-    )
+    pipeline, manager = build_pipeline(MemoryExtractionResult(candidates=[candidate]))
 
     await manager.save_memory(
         user_id="user_001",
@@ -215,10 +183,7 @@ async def test_pipeline_memory_conflict() -> None:
         user_message="我喜欢详细的中文代码注释。",
     )
 
-    assert (
-        result.deduplication_results[0].status
-        == "conflict"
-    )
+    assert result.deduplication_results[0].status == "conflict"
 
     saved = await manager.get_memory(
         "user_001",
@@ -227,6 +192,7 @@ async def test_pipeline_memory_conflict() -> None:
 
     assert saved is not None
     assert saved["content"] == "喜欢中文代码注释"
+
 
 @pytest.mark.anyio
 async def test_pipeline_confirm_update() -> None:
@@ -237,11 +203,7 @@ async def test_pipeline_confirm_update() -> None:
         evidence="简洁的英文代码注释",
     )
 
-    pipeline, manager = build_pipeline(
-        MemoryExtractionResult(
-            candidates=[candidate]
-        )
-    )
+    pipeline, manager = build_pipeline(MemoryExtractionResult(candidates=[candidate]))
 
     # 先保存旧记忆。
     await manager.save_memory(
@@ -278,11 +240,7 @@ async def test_pipeline_confirm_update_missing_memory() -> None:
         evidence="简洁的英文代码注释",
     )
 
-    pipeline, manager = build_pipeline(
-        MemoryExtractionResult(
-            candidates=[candidate]
-        )
-    )
+    pipeline, manager = build_pipeline(MemoryExtractionResult(candidates=[candidate]))
 
     result = await pipeline.confirm_update(
         user_id="user_001",

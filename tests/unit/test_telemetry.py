@@ -1,4 +1,3 @@
-
 """模型调用日志事件测试。"""
 
 import json
@@ -31,9 +30,7 @@ def test_primary_success_event(caplog):
 
     assert record.levelno == logging.INFO
 
-    payload = json.loads(
-        record.getMessage().removeprefix("model_call ")
-    )
+    payload = json.loads(record.getMessage().removeprefix("model_call "))
 
     assert payload["event"] == "model_call"
     assert payload["model_name"] == "qwen3:8b"
@@ -58,11 +55,7 @@ def test_fallback_success_event(caplog):
     ):
         emit_model_call(event)
 
-    payload = json.loads(
-        caplog.records[-1].getMessage().removeprefix(
-            "model_call "
-        )
-    )
+    payload = json.loads(caplog.records[-1].getMessage().removeprefix("model_call "))
 
     assert payload["model_name"] == "qwen3:14b"
     assert payload["error_kind"] == "timeout"

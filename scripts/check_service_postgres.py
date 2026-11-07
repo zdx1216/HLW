@@ -1,4 +1,3 @@
-
 """冒烟测试：验证 AgentService 的 PostgreSQL 持久化能力。
 
 流程：先在第一个服务生命周期内写入一轮对话，退出后连接关闭；
@@ -23,10 +22,7 @@ async def main() -> None:
     print("STEP 1: New thread")
     print("THREAD_ID:", thread_id)
 
-    first_message = (
-        "Use get_project_status and tell me "
-        "the current milestone."
-    )
+    first_message = "Use get_project_status and tell me the current milestone."
 
     # 第一个生命周期：打开服务并写入首轮对话。
     # 退出 with 后 PostgreSQL 连接关闭，内存中的状态不再保留。
@@ -66,9 +62,7 @@ async def main() -> None:
         )
 
         if not previous_message_found:
-            raise RuntimeError(
-                "Previous conversation was not restored"
-            )
+            raise RuntimeError("Previous conversation was not restored")
 
         # 最后一条消息即模型对上一轮提问的回答。
         last_message = messages[-1]
@@ -85,9 +79,7 @@ if __name__ == "__main__":
         # Windows 默认的 ProactorEventLoop 不支持 add_reader，
         # 而 psycopg 异步连接依赖它，因此改用 SelectorEventLoop。
         # Runner 负责创建循环，并在退出时清理未完成的任务。
-        with asyncio.Runner(
-            loop_factory=asyncio.SelectorEventLoop
-        ) as runner:
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
     else:
         asyncio.run(main())

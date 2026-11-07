@@ -1,4 +1,3 @@
-
 """HLW PostgreSQL Store 集成测试。"""
 
 import asyncio
@@ -38,7 +37,6 @@ async def main() -> None:
     }
 
     async with open_postgres_store() as store:
-
         print("STEP 1: PostgreSQL Store connected and initialized")
 
         # 1. 分别保存两名用户的记忆。
@@ -77,26 +75,19 @@ async def main() -> None:
         )
 
         assert updated_item is not None
-        assert (
-            updated_item.value["content"]
-            == "喜欢详细的中文代码注释"
-        )
+        assert updated_item.value["content"] == "喜欢详细的中文代码注释"
 
         print("STEP 4: Memory update PASS")
 
         # 4. 使用 filter 查询用户 A 的记忆。
         results = await store.asearch(
             namespace_a,
-            filter={
-                "category": "learning_preference"
-            },
+            filter={"category": "learning_preference"},
             limit=10,
         )
 
         assert any(
-            item.key == key
-            and item.value["content"]
-            == "喜欢详细的中文代码注释"
+            item.key == key and item.value["content"] == "喜欢详细的中文代码注释"
             for item in results
         )
 
@@ -119,10 +110,7 @@ async def main() -> None:
         )
 
         assert remaining_item is not None
-        assert (
-            remaining_item.value["content"]
-            == "喜欢简短回答"
-        )
+        assert remaining_item.value["content"] == "喜欢简短回答"
 
         # 清理用户 B 的测试数据。
         await store.adelete(namespace_b, key)
@@ -133,14 +121,9 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-
     # Windows 下 psycopg 异步连接需要兼容的事件循环。
     if sys.platform == "win32":
-        with asyncio.Runner(
-                    loop_factory=asyncio.SelectorEventLoop
-                ) as runner:
-
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
     else:
-            asyncio.run(main())
-    
+        asyncio.run(main())

@@ -95,13 +95,9 @@ async def test_normalized_user_ids_share_one_deduplication_lock():
         execution_locks,
     )
 
-    candidate_1 = make_candidate(
-        "喜欢中文代码注释"
-    )
+    candidate_1 = make_candidate("喜欢中文代码注释")
 
-    candidate_2 = make_candidate(
-        "喜欢英文代码注释"
-    )
+    candidate_2 = make_candidate("喜欢英文代码注释")
 
     # 第一个请求使用带空格的 ID。
     first_task = asyncio.create_task(
@@ -125,9 +121,7 @@ async def test_normalized_user_ids_share_one_deduplication_lock():
             candidate_2,
         )
 
-    second_task = asyncio.create_task(
-        second_request()
-    )
+    second_task = asyncio.create_task(second_request())
 
     try:
         await second_started.wait()
@@ -176,13 +170,9 @@ async def test_different_users_have_independent_memories():
         deduplicator,
     ) = build_memory_system()
 
-    candidate_1 = make_candidate(
-        "喜欢中文代码注释"
-    )
+    candidate_1 = make_candidate("喜欢中文代码注释")
 
-    candidate_2 = make_candidate(
-        "喜欢英文代码注释"
-    )
+    candidate_2 = make_candidate("喜欢英文代码注释")
 
     # 两个用户同时保存同一个 Key。
     results = await asyncio.gather(
@@ -243,9 +233,7 @@ async def test_invalid_identity_rejected_before_memory_processing(
         deduplicator,
     ) = build_memory_system()
 
-    candidate = make_candidate(
-        "喜欢中文代码注释"
-    )
+    candidate = make_candidate("喜欢中文代码注释")
 
     with pytest.raises(ValueError):
         await deduplicator.process(

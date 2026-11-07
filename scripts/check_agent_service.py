@@ -1,4 +1,3 @@
-
 """验证 HLW Agent Service 实际执行。"""
 
 import asyncio
@@ -19,10 +18,7 @@ agent_service = AgentService(
 
 async def main():
     result = await agent_service.run(
-        message=(
-            "请调用 get_project_status，"
-            "查询 HLW 的当前版本和开发阶段。"
-        ),
+        message=("请调用 get_project_status，查询 HLW 的当前版本和开发阶段。"),
         thread_id="hlw-service-test-001",
     )
 

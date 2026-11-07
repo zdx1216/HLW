@@ -1,4 +1,3 @@
-
 """HLW 长期记忆提取的数据结构。
 
 本模块只定义数据格式，不连接数据库，
@@ -15,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class MemoryCandidate(BaseModel):
     """从用户对话中提取的一条候选长期记忆。"""
+
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
@@ -61,6 +61,7 @@ class MemoryExtractionResult(BaseModel):
         max_length=5,
     )
 
+
 class MemoryRejection(BaseModel):
     """记录一条候选记忆被拒绝的原因。"""
 
@@ -76,13 +77,10 @@ class MemoryRejection(BaseModel):
 class MemoryValidationResult(BaseModel):
     """记忆校验的最终结果。"""
 
-    accepted: list[MemoryCandidate] = Field(
-        default_factory=list
-    )
+    accepted: list[MemoryCandidate] = Field(default_factory=list)
 
-    rejected: list[MemoryRejection] = Field(
-        default_factory=list
-    )
+    rejected: list[MemoryRejection] = Field(default_factory=list)
+
 
 class MemoryDeduplicationResult(BaseModel):
     """记忆去重处理结果。"""
@@ -90,15 +88,17 @@ class MemoryDeduplicationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     key: str
     status: Literal[
-        "created", # 新记忆
-        "unchanged", # 完全重复
-        "conflict", # 内容不同但没有授权，更新后再次提交相同记忆
-        "updated", # 明确授权更新
+        "created",  # 新记忆
+        "unchanged",  # 完全重复
+        "conflict",  # 内容不同但没有授权，更新后再次提交相同记忆
+        "updated",  # 明确授权更新
     ]
     # 对处理结果的简要说明
     message: str
     # 如果存在旧记忆，记录其原始内容
     existing_content: str | None = None
+
+
 class MemoryPipelineResult(BaseModel):
     """完整的长期记忆流水线执行结果。"""
 
@@ -111,6 +111,4 @@ class MemoryPipelineResult(BaseModel):
     validation: MemoryValidationResult
 
     # Deduplicator 对每条合格记忆的处理结果
-    deduplication_results: list[
-        MemoryDeduplicationResult
-    ] = Field(default_factory=list)
+    deduplication_results: list[MemoryDeduplicationResult] = Field(default_factory=list)

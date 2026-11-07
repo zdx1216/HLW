@@ -1,4 +1,3 @@
-
 """HLW MemoryExtractor 单元测试。
 
 使用 FakeStructuredModel 模拟 LLM，
@@ -48,13 +47,9 @@ def test_extract_valid_candidate() -> None:
         }
     )
 
-    extractor = MemoryExtractor(
-        structured_model=fake_model
-    )
+    extractor = MemoryExtractor(structured_model=fake_model)
 
-    result = asyncio.run(
-        extractor.extract(message)
-    )
+    result = asyncio.run(extractor.extract(message))
 
     assert len(result.candidates) == 1
     assert result.candidates[0].key == "python_comment_style"
@@ -80,13 +75,9 @@ def test_reject_invalid_evidence() -> None:
         }
     )
 
-    extractor = MemoryExtractor(
-        structured_model=fake_model
-    )
+    extractor = MemoryExtractor(structured_model=fake_model)
 
-    result = asyncio.run(
-        extractor.extract(message)
-    )
+    result = asyncio.run(extractor.extract(message))
 
     assert result.candidates == []
 
@@ -115,13 +106,9 @@ def test_remove_duplicate_keys() -> None:
         }
     )
 
-    extractor = MemoryExtractor(
-        structured_model=fake_model
-    )
+    extractor = MemoryExtractor(structured_model=fake_model)
 
-    result = asyncio.run(
-        extractor.extract(message)
-    )
+    result = asyncio.run(extractor.extract(message))
 
     assert len(result.candidates) == 1
     assert result.candidates[0].content == "喜欢详细的中文注释"
@@ -132,19 +119,11 @@ def test_empty_extraction() -> None:
 
     message = "今天下午我要去超市买东西。"
 
-    fake_model = FakeStructuredModel(
-        {
-            "candidates": []
-        }
-    )
+    fake_model = FakeStructuredModel({"candidates": []})
 
-    extractor = MemoryExtractor(
-        structured_model=fake_model
-    )
+    extractor = MemoryExtractor(structured_model=fake_model)
 
-    result = asyncio.run(
-        extractor.extract(message)
-    )
+    result = asyncio.run(extractor.extract(message))
 
     assert result.candidates == []
 
@@ -152,19 +131,11 @@ def test_empty_extraction() -> None:
 def test_reject_empty_user_message() -> None:
     """测试：空消息不允许调用模型。"""
 
-    fake_model = FakeStructuredModel(
-        {
-            "candidates": []
-        }
-    )
+    fake_model = FakeStructuredModel({"candidates": []})
 
-    extractor = MemoryExtractor(
-        structured_model=fake_model
-    )
+    extractor = MemoryExtractor(structured_model=fake_model)
 
     with pytest.raises(ValueError):
-        asyncio.run(
-            extractor.extract("   ")
-        )
+        asyncio.run(extractor.extract("   "))
 
     assert fake_model.calls == 0

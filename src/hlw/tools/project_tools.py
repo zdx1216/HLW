@@ -1,4 +1,3 @@
-
 """HLW project status query tool."""
 
 import json
@@ -17,7 +16,6 @@ def get_project_status() -> str:
         "phase": "P0",
         "milestone": "P0-02",
         "as_of": "2026-11-06",
-
         "status_policy": {
             "implemented": (
                 "The capability exists in code. "
@@ -31,15 +29,11 @@ def get_project_status() -> str:
                 "Implementation has started, but integration "
                 "or acceptance work remains."
             ),
-            "planned": (
-                "Implementation has not yet started."
-            ),
+            "planned": ("Implementation has not yet started."),
         },
-
         # ==================================================
         # 1. 已经实现的能力
         # ==================================================
-
         "implemented": [
             "Python project structure",
             "Environment configuration",
@@ -69,11 +63,9 @@ def get_project_status() -> str:
             "Memory search category filtering and pagination",
             "Memory search similarity scores",
         ],
-
         # ==================================================
         # 2. 已经有验证记录的能力
         # ==================================================
-
         "verified": [
             "Unit test suite: 154 passed in the latest reported run",
             "Ruff lint: passed in the latest reported run",
@@ -86,17 +78,14 @@ def get_project_status() -> str:
             "Memory search limit validation passed",
             "PostgreSQL backup restore verification passed",
         ],
-
         "verification_scope": (
             "Verification results are based on recorded local runs. "
             "They are not live test results. "
             "Tests must be rerun before release."
         ),
-
         # ==================================================
         # 3. 正在开发的能力
         # ==================================================
-
         "in_progress": [
             "Inject PostgreSQL Store into persistent Agent runtime",
             "Integrate Store into DeepAgent graph",
@@ -108,11 +97,9 @@ def get_project_status() -> str:
             "Implement cross-thread memory integration tests",
             "Implement memory failure handling and recovery",
         ],
-
         # ==================================================
         # 4. 尚未开始的能力
         # ==================================================
-
         "planned": [
             "Multi-user authentication and API authorization",
             "Cross-process distributed concurrency coordination",

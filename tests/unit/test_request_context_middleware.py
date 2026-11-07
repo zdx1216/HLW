@@ -108,3 +108,136 @@ async def test_async_model_call_context(monkeypatch):
     assert result == "success"
     assert observed == ["lg-async-001"]
     assert get_request_id() == "-"
+
+def make_tool_request(config):
+    """构造工具调用测试请求。"""
+
+    return SimpleNamespace(
+        tool_call={
+            "name": "test_tool",
+            "args": {},
+            "id": "tool-001",
+        },
+        tool=None,
+        state={},
+        runtime=SimpleNamespace(config=config),
+    )
+
+
+def test_sync_tool_call_context():
+    """同步工具调用能够继承 request_id。"""
+
+    middleware = RequestContextMiddleware()
+
+    request = make_tool_request({
+        "configurable": {
+            "langgraph_request_id": "tool-request-001",
+        }
+    })
+
+    observed = []
+
+    result = middleware.wrap_tool_call(
+        request,
+        lambda _: observed.append(get_request_id()) or "success",
+    )
+
+    assert result == "success"
+    assert observed == ["tool-request-001"]
+    assert get_request_id() == "-"
+
+
+@pytest.mark.anyio
+async def test_async_tool_call_context():
+    """异步工具调用能够继承 request_id。"""
+
+    middleware = RequestContextMiddleware()
+
+    request = make_tool_request({
+        "configurable": {
+            "langgraph_request_id": "tool-async-001",
+        }
+    })
+
+    observed = []
+
+    async def handler(_):
+        observed.append(get_request_id())
+        return "success"
+
+    result = await middleware.awrap_tool_call(
+        request,
+        handler,
+    )
+
+    assert result == "success"
+    assert observed == ["tool-async-001"]
+    assert get_request_id() == "-"
+
+
+def test_tool_call_uses_metadata_request_id():
+    """工具调用可以从 metadata 获取 request_id。"""
+
+    middleware = RequestContextMiddleware()
+
+    request = make_tool_request({
+        "metadata": {
+            "request_id": "metadata-request-001",
+        }
+    })
+
+    observed = []
+
+    middleware.wrap_tool_call(
+        request,
+        lambda _: observed.append(get_request_id()),
+    )
+
+    assert observed == ["metadata-request-001"]
+
+
+def test_tool_call_preserves_existing_context():
+    """工具调用不覆盖已有 API 请求上下文。"""
+
+    middleware = RequestContextMiddleware()
+
+    request = make_tool_request({
+        "configurable": {
+            "langgraph_request_id": "langgraph-request-001",
+        }
+    })
+
+    observed = []
+
+    with request_context("api-request-001"):
+        middleware.wrap_tool_call(
+            request,
+            lambda _: observed.append(get_request_id()),
+        )
+
+    assert observed == ["api-request-001"]
+    assert get_request_id() == "-"
+
+
+def test_tool_call_restores_context_after_exception():
+    """工具调用异常后正确恢复请求上下文。"""
+
+    middleware = RequestContextMiddleware()
+
+    request = make_tool_request({
+        "configurable": {
+            "langgraph_request_id": "error-request-001",
+        }
+    })
+
+    def failing_handler(_):
+        assert get_request_id() == "error-request-001"
+        raise RuntimeError("tool failed")
+
+    with pytest.raises(RuntimeError, match="tool failed"):
+        middleware.wrap_tool_call(
+            request,
+            failing_handler,
+        )
+
+    assert get_request_id() == "-"

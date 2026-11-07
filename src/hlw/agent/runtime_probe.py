@@ -79,9 +79,7 @@ class RuntimeContextProbeMiddleware(AgentMiddleware):
                 if key in configurable
             },
             "error": config_error,
-            "langgraph_request_id": configurable.get(
-                "langgraph_request_id"
-            ),
+            "langgraph_request_id": configurable.get("langgraph_request_id"),
         }
 
         # STEP 5：输出诊断信息

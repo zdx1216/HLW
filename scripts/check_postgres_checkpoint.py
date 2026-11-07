@@ -1,4 +1,3 @@
-
 """HLW PostgreSQL Checkpoint 持久化实验。"""
 
 import argparse
@@ -17,11 +16,7 @@ def create_test_graph(checkpointer):
     """创建用于验证持久化的最小 LangGraph。"""
 
     def reply(state: MessagesState):
-        return {
-            "messages": [
-                AIMessage(content="HLW 状态持久化成功")
-            ]
-        }
+        return {"messages": [AIMessage(content="HLW 状态持久化成功")]}
 
     builder = StateGraph(MessagesState)
     builder.add_node("reply", reply)
@@ -50,13 +45,7 @@ async def main() -> None:
 
         if args.action == "write":
             await graph.ainvoke(
-                {
-                    "messages": [
-                        HumanMessage(
-                            content="这是 HLW 的持久化测试"
-                        )
-                    ]
-                },
+                {"messages": [HumanMessage(content="这是 HLW 的持久化测试")]},
                 config=config,
             )
             print(f"写入成功: {args.thread}")
@@ -80,9 +69,7 @@ def run() -> None:
     """在 Windows 上为 psycopg 使用兼容的事件循环。"""
 
     if sys.platform == "win32":
-        with asyncio.Runner(
-            loop_factory=asyncio.SelectorEventLoop
-        ) as runner:
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
     else:
         asyncio.run(main())

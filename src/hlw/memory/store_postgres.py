@@ -1,4 +1,3 @@
-
 """HLW PostgreSQL Store 连接与生命周期管理。
 
 Store 用于保存跨会话长期记忆。
@@ -20,8 +19,7 @@ from hlw.memory.checkpoints_postgres import (
 
 
 @asynccontextmanager
-async def open_postgres_store(
-) -> AsyncGenerator[AsyncPostgresStore, None]:
+async def open_postgres_store() -> AsyncGenerator[AsyncPostgresStore, None]:
     """创建、初始化并正确关闭 PostgreSQL Store。
 
     支持：
@@ -41,13 +39,10 @@ async def open_postgres_store(
     # STEP 2：创建 LangChain 官方 Embedding 实例
     # ========================================================
     embeddings = OllamaEmbeddings(
-
         # 使用统一配置中的模型名称
         model=settings.embedding_model,
-
         # Ollama 原生服务地址
         base_url=settings.embedding_base_url,
-
         # 输出向量维度
         dimensions=settings.embedding_dimensions,
     )
@@ -71,7 +66,6 @@ async def open_postgres_store(
         conninfo,
         index=index_config,
     ) as store:
-
         # 初始化数据库表和向量索引迁移
         await store.setup()
 

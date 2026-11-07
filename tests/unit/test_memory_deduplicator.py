@@ -1,4 +1,3 @@
-
 """HLW MemoryDeduplicator 单元测试。"""
 
 import pytest
@@ -287,6 +286,7 @@ async def test_category_difference_is_conflict(
     )
 
     assert result.status == "conflict"
+
 
 @pytest.mark.anyio
 async def test_confirm_update(memory_system) -> None:

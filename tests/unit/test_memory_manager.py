@@ -1,4 +1,3 @@
-
 """HLW MemoryManager 单元测试。
 
 使用 InMemoryStore 替代 PostgreSQL，
@@ -38,11 +37,9 @@ class FakeEmbeddings(Embeddings):
         self,
         texts: list[str],
     ) -> list[list[float]]:
-        return [
-            self.embed_query(text)
-            for text in texts
-        ]
-        
+        return [self.embed_query(text) for text in texts]
+
+
 def create_manager() -> MemoryManager:
     """创建使用内存 Store 的 MemoryManager。
 
@@ -199,9 +196,7 @@ async def test_list_memories():
         category="project",
     )
 
-    all_memories = await manager.list_memories(
-        "user_001"
-    )
+    all_memories = await manager.list_memories("user_001")
 
     assert len(all_memories) == 2
 
@@ -421,15 +416,9 @@ async def test_list_memories_pagination():
         offset=2,
     )
 
-    keys_1 = {
-        item["key"]
-        for item in page_1
-    }
+    keys_1 = {item["key"] for item in page_1}
 
-    keys_2 = {
-        item["key"]
-        for item in page_2
-    }
+    keys_2 = {item["key"] for item in page_2}
 
     assert len(page_1) == 2
     assert len(page_2) == 2
@@ -451,10 +440,7 @@ async def test_list_memories_pagination():
     assert page_3 == []
 
     # project 类别不能出现在 preference 结果中。
-    assert all(
-        item["category"] == "preference"
-        for item in page_1 + page_2
-    )
+    assert all(item["category"] == "preference" for item in page_1 + page_2)
 
 
 @pytest.mark.anyio

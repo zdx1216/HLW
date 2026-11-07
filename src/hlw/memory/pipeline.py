@@ -1,4 +1,3 @@
-
 """HLW 长期记忆流水线。
 
 负责协调：
@@ -48,16 +47,11 @@ class MemoryPipeline:
             raise ValueError("user_id 不能为空")
 
         # STEP 2：检查用户消息
-        if (
-            not isinstance(user_message, str)
-            or not user_message.strip()
-        ):
+        if not isinstance(user_message, str) or not user_message.strip():
             raise ValueError("user_message 不能为空")
 
         # STEP 3：调用 Extractor 提取候选记忆
-        extraction = await self._extractor.extract(
-            user_message
-        )
+        extraction = await self._extractor.extract(user_message)
 
         # STEP 4：调用 Validator 校验候选记忆
         validation = self._validator.validate(
@@ -69,7 +63,6 @@ class MemoryPipeline:
         deduplication_results = []
 
         for candidate in validation.accepted:
-
             result = await self._deduplicator.process(
                 user_id=user_id,
                 candidate=candidate,
@@ -105,9 +98,7 @@ class MemoryPipeline:
 
         # STEP 2：检查候选记忆
         if not isinstance(candidate, MemoryCandidate):
-            raise TypeError(
-                "candidate 必须是 MemoryCandidate 类型"
-            )
+            raise TypeError("candidate 必须是 MemoryCandidate 类型")
 
         # STEP 3：调用 Deduplicator 执行授权更新
         return await self._deduplicator.confirm_update(

@@ -1,4 +1,3 @@
-
 """Unit tests for the HLW project status tool."""
 
 import json
@@ -53,20 +52,11 @@ def test_verified_capabilities() -> None:
     result = load_status()
     verified = result["verified"]
 
-    assert any(
-        "154 passed" in item
-        for item in verified
-    )
+    assert any("154 passed" in item for item in verified)
 
-    assert any(
-        "Ruff lint" in item
-        for item in verified
-    )
+    assert any("Ruff lint" in item for item in verified)
 
-    assert any(
-        "semantic search integration test passed" in item
-        for item in verified
-    )
+    assert any("semantic search integration test passed" in item for item in verified)
 
     assert result["verification_scope"]
 
@@ -157,7 +147,4 @@ def test_tool_returns_valid_json() -> None:
 
         assert len(values) > 0
 
-        assert all(
-            isinstance(item, str) and item.strip()
-            for item in values
-        )
+        assert all(isinstance(item, str) and item.strip() for item in values)

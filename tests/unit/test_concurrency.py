@@ -1,4 +1,3 @@
-
 """HLW 异步任务并发限制器测试。"""
 
 import asyncio
@@ -36,9 +35,7 @@ def test_concurrency_limit():
             finally:
                 active -= 1
 
-        await asyncio.gather(
-            *(limiter.run(work) for _ in range(8))
-        )
+        await asyncio.gather(*(limiter.run(work) for _ in range(8)))
 
         return peak
 
@@ -76,9 +73,7 @@ def test_release_after_cancellation():
             entered.set()
             await asyncio.Future()
 
-        task = asyncio.create_task(
-            limiter.run(long_task)
-        )
+        task = asyncio.create_task(limiter.run(long_task))
 
         await asyncio.wait_for(
             entered.wait(),

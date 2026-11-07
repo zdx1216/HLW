@@ -47,9 +47,7 @@ class MemoryManager:
         user_id 必须经过统一身份校验和规范化。
         """
 
-        normalized_user_id = normalize_user_id(
-            user_id
-        )
+        normalized_user_id = normalize_user_id(user_id)
 
         return (
             "users",
@@ -65,9 +63,7 @@ class MemoryManager:
         """检查字符串是否有效，并去除首尾空格。"""
 
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(
-                f"{field_name} 不能为空"
-            )
+            raise ValueError(f"{field_name} 不能为空")
 
         return value.strip()
 
@@ -114,9 +110,7 @@ class MemoryManager:
 
         # STEP 5：已存在则保留原始创建时间。
         created_at = (
-            existing.value.get("created_at", now)
-            if existing is not None
-            else now
+            existing.value.get("created_at", now) if existing is not None else now
         )
 
         # STEP 6：统一记忆数据结构。
@@ -193,25 +187,13 @@ class MemoryManager:
         # STEP 2：检查 limit。
         # 必须是大于等于 1 的整数。
         # bool 是 int 的子类，因此需要单独排除。
-        if (
-            not isinstance(limit, int)
-            or isinstance(limit, bool)
-            or limit < 1
-        ):
-            raise ValueError(
-                "limit 必须是正整数"
-            )
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("limit 必须是正整数")
 
         # STEP 3：检查 offset。
         # offset 可以为 0，但不能是负数。
-        if (
-            not isinstance(offset, int)
-            or isinstance(offset, bool)
-            or offset < 0
-        ):
-            raise ValueError(
-                "offset 必须是非负整数"
-            )
+        if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+            raise ValueError("offset 必须是非负整数")
 
         # STEP 4：构建类别筛选条件。
         filters = None
@@ -266,9 +248,7 @@ class MemoryManager:
         )
 
         if content is None and category is None:
-            raise ValueError(
-                "至少提供一个需要更新的字段"
-            )
+            raise ValueError("至少提供一个需要更新的字段")
 
         # STEP 2：读取原有记忆。
         existing = await self._store.aget(
@@ -296,9 +276,7 @@ class MemoryManager:
             )
 
         # STEP 5：更新修改时间。
-        memory["updated_at"] = (
-            datetime.now(UTC).isoformat()
-        )
+        memory["updated_at"] = datetime.now(UTC).isoformat()
 
         # STEP 6：写入 Store。
         await self._store.aput(
@@ -374,24 +352,12 @@ class MemoryManager:
         )
 
         # STEP 3：检查 limit。
-        if (
-            not isinstance(limit, int)
-            or isinstance(limit, bool)
-            or limit < 1
-        ):
-            raise ValueError(
-                "limit 必须是正整数"
-            )
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("limit 必须是正整数")
 
         # STEP 4：检查 offset。
-        if (
-            not isinstance(offset, int)
-            or isinstance(offset, bool)
-            or offset < 0
-        ):
-            raise ValueError(
-                "offset 必须是非负整数"
-            )
+        if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+            raise ValueError("offset 必须是非负整数")
 
         # STEP 5：构建类别过滤条件。
         filters = None

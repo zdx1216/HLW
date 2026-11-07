@@ -1,4 +1,3 @@
-
 """P0-02C：受控重试与模型回退的真实集成测试。"""
 
 import asyncio
@@ -44,10 +43,7 @@ probe_graph = create_deep_agent(
     model=broken_primary,
     backend=StateBackend(),
     middleware=[resilience_middleware],
-    system_prompt=(
-        "你是 HLW 模型容错测试助手。"
-        "请使用中文简短回答。"
-    ),
+    system_prompt=("你是 HLW 模型容错测试助手。请使用中文简短回答。"),
 )
 
 
@@ -65,9 +61,7 @@ async def main():
             "messages": [
                 {
                     "role": "user",
-                    "content": (
-                        "请回复：HLW受控回退测试成功。"
-                    ),
+                    "content": ("请回复：HLW受控回退测试成功。"),
                 }
             ]
         },
@@ -81,16 +75,13 @@ async def main():
     assert isinstance(final_message, AIMessage)
     assert final_message.content
 
-    actual_model = final_message.response_metadata.get(
-        "model_name"
-    )
+    actual_model = final_message.response_metadata.get("model_name")
 
     print("\n实际响应模型:", actual_model)
     print("最终回复:", final_message.content)
 
     assert actual_model == settings.fallback_model, (
-        f"预期备用模型 {settings.fallback_model}，"
-        f"实际响应模型 {actual_model}"
+        f"预期备用模型 {settings.fallback_model}，实际响应模型 {actual_model}"
     )
 
     print("\nP0-02C 真实回退验证通过！")

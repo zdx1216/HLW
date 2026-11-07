@@ -1,4 +1,3 @@
-
 """HLW 记忆提取 Schema 测试。"""
 
 import pytest

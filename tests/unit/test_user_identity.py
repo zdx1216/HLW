@@ -1,4 +1,3 @@
-
 """HLW 用户身份标识独立单元测试。"""
 
 import pytest
@@ -8,6 +7,7 @@ from hlw.core.identity import normalize_user_id
 # ============================================================
 # 1. 合法用户 ID 测试
 # ============================================================
+
 
 @pytest.mark.parametrize(
     ("raw_user_id", "expected"),
@@ -33,6 +33,7 @@ def test_normalize_valid_user_id(
 # ============================================================
 # 2. 非法用户 ID 测试
 # ============================================================
+
 
 @pytest.mark.parametrize(
     "invalid_user_id",

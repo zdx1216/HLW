@@ -14,7 +14,7 @@ from typing import Literal
 
 from hlw.core.logging_config import get_logger
 from hlw.core.request_context import get_request_id
-
+from hlw.core.event_logger import emit_event
 logger = get_logger(__name__)
 
 # 调用结果只有两种：成功 / 失败（失败时配合 error_kind 细分原因）
@@ -70,7 +70,12 @@ def emit_model_call(event: ModelCallEvent) -> None:
 
     # 成功 → INFO（正常流水）；失败 → ERROR（告警/排查）
     level = logging.INFO if event.status == "success" else logging.ERROR
-
+    emit_event(
+        "model.call.summary",
+        payload=asdict(event),
+        duration_ms=event.latency_ms,
+        status=event.status,
+    )
     # ensure_ascii=False 让中文原样输出而不是 \\uXXXX 转义，日志可直接读
     logger.log(
         level,

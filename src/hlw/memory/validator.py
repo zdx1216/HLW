@@ -1,4 +1,3 @@
-
 """HLW 长期记忆校验器。
 
 负责检查候选记忆是否满足基本保存规则。
@@ -22,22 +21,15 @@ SECRET_PATTERNS = [
         r"refresh[_-]?token|password|passwd|secret)"
         r"\s*[:=]\s*[^\s,;]+"
     ),
-    re.compile(
-        r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{12,}"
-    ),
-    re.compile(
-        r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----"
-    ),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{12,}"),
+    re.compile(r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----"),
 ]
 
 
 def contains_possible_secret(text: str) -> bool:
     """检查文本是否包含疑似凭证。"""
 
-    return any(
-        pattern.search(text)
-        for pattern in SECRET_PATTERNS
-    )
+    return any(pattern.search(text) for pattern in SECRET_PATTERNS)
 
 
 class MemoryValidator:
@@ -50,10 +42,7 @@ class MemoryValidator:
     ) -> MemoryValidationResult:
         """校验候选记忆并分别返回通过和拒绝的结果。"""
 
-        if (
-            not isinstance(user_message, str)
-            or not user_message.strip()
-        ):
+        if not isinstance(user_message, str) or not user_message.strip():
             raise ValueError("user_message 不能为空")
 
         accepted = []
@@ -63,7 +52,6 @@ class MemoryValidator:
         seen_keys: set[str] = set()
 
         for candidate in extraction.candidates:
-
             # 检查 1：证据必须来自用户原文。
             if candidate.evidence not in user_message:
                 rejected.append(
@@ -75,9 +63,8 @@ class MemoryValidator:
                 continue
 
             # 检查 2：候选内容和证据不能包含疑似秘密。
-            if (
-                contains_possible_secret(candidate.content)
-                or contains_possible_secret(candidate.evidence)
+            if contains_possible_secret(candidate.content) or contains_possible_secret(
+                candidate.evidence
             ):
                 rejected.append(
                     MemoryRejection(

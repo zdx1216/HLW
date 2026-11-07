@@ -1,4 +1,3 @@
-
 """Model Gateway 单元测试。"""
 
 import pytest

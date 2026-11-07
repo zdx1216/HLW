@@ -1,4 +1,3 @@
-
 """HLW 长期记忆提取器。
 
 MemoryExtractor 负责：
@@ -93,17 +92,12 @@ class MemoryExtractor:
     ) -> MemoryExtractionResult:
         """从一条用户消息中提取候选记忆。"""
 
-        if (
-            not isinstance(user_message, str)
-            or not user_message.strip()
-        ):
+        if not isinstance(user_message, str) or not user_message.strip():
             raise ValueError("user_message 不能为空")
 
         # 组织 LLM 输入。
         messages = [
-            SystemMessage(
-                content=EXTRACTION_PROMPT
-            ),
+            SystemMessage(content=EXTRACTION_PROMPT),
             HumanMessage(
                 content=(
                     "请分析以下用户原文，提取符合要求的长期记忆：\n"
@@ -115,14 +109,10 @@ class MemoryExtractor:
         ]
 
         # 调用结构化模型。
-        raw_result = await self._model.ainvoke(
-            messages
-        )
+        raw_result = await self._model.ainvoke(messages)
 
         # 再次进行 Pydantic 校验，确保输出格式正确。
-        result = MemoryExtractionResult.model_validate(
-            raw_result
-        )
+        result = MemoryExtractionResult.model_validate(raw_result)
 
         # 只保留能够在原始用户消息中找到证据的记忆。
         verified_candidates = []
@@ -131,7 +121,6 @@ class MemoryExtractor:
         seen_keys: set[str] = set()
 
         for candidate in result.candidates:
-
             # 证据必须是用户原文中的连续文本。
             if candidate.evidence not in user_message:
                 continue
@@ -143,6 +132,4 @@ class MemoryExtractor:
             seen_keys.add(candidate.key)
             verified_candidates.append(candidate)
 
-        return MemoryExtractionResult(
-            candidates=verified_candidates
-        )
+        return MemoryExtractionResult(candidates=verified_candidates)

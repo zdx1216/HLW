@@ -1,4 +1,3 @@
-
 """HLW MemoryManager PostgreSQL 集成测试。"""
 
 import asyncio
@@ -16,7 +15,6 @@ async def main() -> None:
     key = "learning_style"
 
     async with open_postgres_store() as store:
-
         manager = MemoryManager(store)
 
         try:
@@ -87,10 +85,13 @@ async def main() -> None:
 
             assert deleted is True
 
-            assert await manager.get_memory(
-                user_a,
-                key,
-            ) is None
+            assert (
+                await manager.get_memory(
+                    user_a,
+                    key,
+                )
+                is None
+            )
 
             # 用户 B 的记忆不受影响
             remaining = await manager.get_memory(
@@ -113,10 +114,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     if sys.platform == "win32":
-        with asyncio.Runner(
-                    loop_factory=asyncio.SelectorEventLoop
-                ) as runner:
-
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
     else:
         asyncio.run(main())

@@ -1,4 +1,5 @@
 """HLW PostgreSQL Checkpointer 连接与生命周期管理。"""
+
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -19,9 +20,7 @@ def build_postgres_conninfo() -> str:
     password = os.getenv("HLW_DB_PASSWORD")
 
     if not password:
-        raise ValueError(
-            "缺少 HLW_DB_PASSWORD，请检查项目根目录的 .env"
-        )
+        raise ValueError("缺少 HLW_DB_PASSWORD，请检查项目根目录的 .env")
 
     return make_conninfo(
         host=os.getenv("HLW_DB_HOST", "127.0.0.1"),
@@ -33,8 +32,7 @@ def build_postgres_conninfo() -> str:
 
 
 @asynccontextmanager
-async def open_postgres_checkpointer(
-) -> AsyncGenerator[AsyncPostgresSaver, None]:
+async def open_postgres_checkpointer() -> AsyncGenerator[AsyncPostgresSaver, None]:
     """创建、初始化并正确关闭 PostgreSQL Checkpointer。
 
     使用示例：
@@ -49,9 +47,7 @@ async def open_postgres_checkpointer(
 
     conninfo = build_postgres_conninfo()
 
-    async with AsyncPostgresSaver.from_conn_string(
-        conninfo
-    ) as saver:
+    async with AsyncPostgresSaver.from_conn_string(conninfo) as saver:
         # 初始化 Checkpointer 所需的数据库表。
         # 当前实验阶段执行 setup()；正式部署时统一管理初始化。
         await saver.setup()

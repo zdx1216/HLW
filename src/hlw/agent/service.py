@@ -1,4 +1,3 @@
-
 """HLW Agent 统一异步执行服务。"""
 
 import asyncio
@@ -31,21 +30,13 @@ class AgentService:
 
         # 第一版采用单用户模式。
         # 默认读取服务端配置的用户身份。
-        configured_user_id = (
-            settings.user_id
-            if user_id is None
-            else user_id
-        )
+        configured_user_id = settings.user_id if user_id is None else user_id
 
         # 统一校验用户身份。
-        self._user_id = normalize_user_id(
-            configured_user_id
-        )
+        self._user_id = normalize_user_id(configured_user_id)
 
         # 控制 Agent 最大并发请求数。
-        self._limiter = AgentConcurrencyLimiter(
-            max_concurrent=max_concurrent
-        )
+        self._limiter = AgentConcurrencyLimiter(max_concurrent=max_concurrent)
 
         # 防止同一个 Thread ID 同时执行多个请求。
         self._thread_locks = ThreadExecutionLocks()
@@ -79,12 +70,7 @@ class AgentService:
 
         rid = uuid4().hex if request_id is None else request_id
 
-        if (
-            not isinstance(rid, str)
-            or not rid.strip()
-            or "\n" in rid
-            or "\r" in rid
-        ):
+        if not isinstance(rid, str) or not rid.strip() or "\n" in rid or "\r" in rid:
             raise ValueError("request_id 格式不合法")
 
         # ==================================================
@@ -125,10 +111,8 @@ class AgentService:
         # ==================================================
 
         with request_context(rid):
-
             logger.info(
-                "Agent request started "
-                "request_id=%s user_id=%s thread_id=%s",
+                "Agent request started request_id=%s user_id=%s thread_id=%s",
                 rid,
                 self._user_id,
                 thread_id,
@@ -137,17 +121,12 @@ class AgentService:
             try:
                 # 同一个 Thread ID 串行执行。
                 async with self._thread_locks.hold(thread_id):
-
                     # 同时限制整个 Agent 服务的并发数量。
-                    result = await self._limiter.run(
-                        invoke_graph
-                    )
+                    result = await self._limiter.run(invoke_graph)
 
             except asyncio.CancelledError:
-
                 logger.warning(
-                    "Agent request cancelled "
-                    "request_id=%s user_id=%s",
+                    "Agent request cancelled request_id=%s user_id=%s",
                     rid,
                     self._user_id,
                 )
@@ -155,10 +134,8 @@ class AgentService:
                 raise
 
             except Exception:
-
                 logger.exception(
-                    "Agent request failed "
-                    "request_id=%s user_id=%s",
+                    "Agent request failed request_id=%s user_id=%s",
                     rid,
                     self._user_id,
                 )
@@ -166,8 +143,7 @@ class AgentService:
                 raise
 
             logger.info(
-                "Agent request completed "
-                "request_id=%s user_id=%s",
+                "Agent request completed request_id=%s user_id=%s",
                 rid,
                 self._user_id,
             )

@@ -1,4 +1,3 @@
-
 """HLW 长期记忆工具测试。"""
 
 import json
@@ -31,10 +30,7 @@ class FakeEmbeddings(Embeddings):
         self,
         texts: list[str],
     ) -> list[list[float]]:
-        return [
-            self.embed_query(text)
-            for text in texts
-        ]
+        return [self.embed_query(text) for text in texts]
 
 
 def create_store() -> InMemoryStore:
@@ -101,9 +97,7 @@ async def test_search_user_memories():
 
     assert data["memories"][0]["key"] == "learning_style"
 
-    assert data["memories"][0]["content"] == (
-        "喜欢详细的中文代码注释"
-    )
+    assert data["memories"][0]["content"] == ("喜欢详细的中文代码注释")
 
 
 @pytest.mark.anyio
@@ -158,17 +152,14 @@ def test_tool_definition():
     """验证工具注册及模型可见参数。"""
 
     # 工具名称正确
-    assert search_user_memories.name == (
-        "search_user_memories"
-    )
+    assert search_user_memories.name == ("search_user_memories")
 
     # 模型只能看到 query 参数
-    model_fields = set(
-        search_user_memories.tool_call_schema.model_fields
-    )
+    model_fields = set(search_user_memories.tool_call_schema.model_fields)
 
     assert model_fields == {"query"}
-    
+
+
 @pytest.mark.anyio
 async def test_invalid_configurable_type():
     """测试 configurable 类型错误时抛出 TypeError。"""

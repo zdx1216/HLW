@@ -1,4 +1,3 @@
-
 """HLW 同一会话的异步执行锁。"""
 
 import asyncio
@@ -41,8 +40,5 @@ class ThreadExecutionLocks:
         finally:
             entry.users -= 1
 
-            if (
-                entry.users == 0
-                and self._entries.get(thread_id) is entry
-            ):
+            if entry.users == 0 and self._entries.get(thread_id) is entry:
                 del self._entries[thread_id]

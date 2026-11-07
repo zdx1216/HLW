@@ -1,4 +1,3 @@
-
 """HLW 长期记忆去重与冲突处理。
 
 负责：
@@ -79,7 +78,6 @@ class MemoryDeduplicator:
             user_id,
             candidate.key,
         ):
-
             # STEP 2：进入受保护的记忆处理过程。
             return await self._process_locked(
                 user_id=user_id,
@@ -111,7 +109,6 @@ class MemoryDeduplicator:
 
         # STEP 2：如果不存在，判断是否允许新增。
         if existing is None:
-
             # 确认更新时，原有记忆必须仍然存在。
             if require_existing:
                 return MemoryDeduplicationResult(

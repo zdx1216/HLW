@@ -1,7 +1,11 @@
 """HLW 主 Agent 结构测试。"""
 
 from hlw.agent.graph import graph, model
+from hlw.agent.request_context_middleware import (
+    RequestContextMiddleware,
+)
 from hlw.core.config import settings
+from hlw.models.resilience import ControlledFallbackMiddleware
 from hlw.tools.memory_tools import search_user_memories
 from hlw.tools.project_tools import get_project_status
 
@@ -142,23 +146,40 @@ def test_graph_modes_share_business_configuration(monkeypatch):
     assert normal_config["tools"] == persistent_config["tools"]
 
     # 4. System Prompt 一致
-    assert normal_config["system_prompt"] == persistent_config["system_prompt"]
+    assert normal_config["system_prompt"] == (persistent_config["system_prompt"])
 
-    # 5. Middleware 类型和核心配置一致
-    normal_middleware = normal_config["middleware"][0]
-    persistent_middleware = persistent_config["middleware"][0]
+    # 5. Middleware 类型和顺序一致
+    expected_types = [
+        RequestContextMiddleware,
+        ControlledFallbackMiddleware,
+    ]
 
-    assert type(normal_middleware) is type(persistent_middleware)
+    assert [type(item) for item in normal_config["middleware"]] == expected_types
 
-    assert normal_middleware.fallback_model is persistent_middleware.fallback_model
+    assert [type(item) for item in persistent_config["middleware"]] == expected_types
 
-    assert normal_middleware.max_retries == (persistent_middleware.max_retries)
+    # 6. 检查模型回退 Middleware 配置
+    normal_fallback = next(
+        item
+        for item in normal_config["middleware"]
+        if isinstance(item, ControlledFallbackMiddleware)
+    )
 
-    # 6. 普通模式没有持久化组件
+    persistent_fallback = next(
+        item
+        for item in persistent_config["middleware"]
+        if isinstance(item, ControlledFallbackMiddleware)
+    )
+
+    assert normal_fallback.fallback_model is persistent_fallback.fallback_model
+
+    assert normal_fallback.max_retries == (persistent_fallback.max_retries)
+
+    # 7. 普通模式没有持久化组件
     assert "checkpointer" not in normal_config
     assert "store" not in normal_config
 
-    # 7. 持久化模式正确注入组件
+    # 8. 持久化模式正确注入组件
     assert persistent_config["checkpointer"] is fake_checkpointer
     assert persistent_config["store"] is fake_store
 

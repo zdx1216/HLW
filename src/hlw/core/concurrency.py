@@ -1,4 +1,3 @@
-
 """HLW Agent 异步任务并发控制。"""
 
 import asyncio
@@ -17,14 +16,10 @@ class AgentConcurrencyLimiter:
             or isinstance(max_concurrent, bool)
             or max_concurrent < 1
         ):
-            raise ValueError(
-                "max_concurrent 必须是大于零的整数"
-            )
+            raise ValueError("max_concurrent 必须是大于零的整数")
 
         self.max_concurrent = max_concurrent
-        self._semaphore = asyncio.Semaphore(
-            max_concurrent
-        )
+        self._semaphore = asyncio.Semaphore(max_concurrent)
 
     async def run(
         self,

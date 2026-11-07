@@ -1,4 +1,3 @@
-
 """HLW PostgreSQL + pgvector 长期记忆语义检索集成测试。
 
 验证：
@@ -53,7 +52,6 @@ async def main() -> None:
     # ========================================================
 
     async with open_postgres_store() as store:
-
         manager = MemoryManager(store)
 
         try:
@@ -66,7 +64,6 @@ async def main() -> None:
             # =================================================
 
             for key, memory in test_memories.items():
-
                 await manager.save_memory(
                     user_id=user_id,
                     key=key,
@@ -90,13 +87,10 @@ async def main() -> None:
             print("返回数量:", len(results))
 
             if not results:
-                raise AssertionError(
-                    "语义检索没有返回任何结果"
-                )
+                raise AssertionError("语义检索没有返回任何结果")
 
             # 输出所有检索结果
             for index, result in enumerate(results, start=1):
-
                 print(f"\n第 {index} 条结果")
                 print("Key:", result["key"])
                 print("内容:", result["content"])
@@ -107,13 +101,10 @@ async def main() -> None:
             best_result = results[0]
 
             assert best_result["key"] == "learning_style", (
-                "最相关记忆不符合预期，"
-                f"实际结果为：{best_result['key']}"
+                f"最相关记忆不符合预期，实际结果为：{best_result['key']}"
             )
 
-            assert best_result.get("score") is not None, (
-                "没有返回向量相似度分数"
-            )
+            assert best_result.get("score") is not None, "没有返回向量相似度分数"
 
             print("\nSTEP 4: 语义排序 PASS")
 
@@ -130,10 +121,7 @@ async def main() -> None:
 
             assert len(preference_results) > 0
 
-            assert all(
-                item["category"] == "preference"
-                for item in preference_results
-            )
+            assert all(item["category"] == "preference" for item in preference_results)
 
             print("STEP 5: Category 过滤 PASS")
 
@@ -156,13 +144,11 @@ async def main() -> None:
             print("=" * 60)
 
         finally:
-
             # =================================================
             # STEP 7：清理测试数据
             # =================================================
 
             for key in test_memories:
-
                 await manager.delete_memory(
                     user_id=user_id,
                     key=key,
@@ -175,15 +161,10 @@ def run() -> None:
     """兼容 Windows 异步数据库连接。"""
 
     if sys.platform == "win32":
-
-        with asyncio.Runner(
-            loop_factory=asyncio.SelectorEventLoop
-        ) as runner:
-
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
 
     else:
-
         asyncio.run(main())
 
 

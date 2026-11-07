@@ -24,9 +24,7 @@ from hlw.core.identity import normalize_user_id
 class _MemoryLockEntry:
     """保存一把 Memory 锁及其使用情况。"""
 
-    lock: asyncio.Lock = field(
-        default_factory=asyncio.Lock
-    )
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     # 当前正在持锁或等待获取锁的任务数量。
     users: int = 0
@@ -61,15 +59,10 @@ class MemoryExecutionLocks:
         """
 
         # STEP 1：使用全局统一规则规范化用户 ID。
-        normalized_user_id = normalize_user_id(
-            user_id
-        )
+        normalized_user_id = normalize_user_id(user_id)
 
         # STEP 2：检查记忆 key。
-        if (
-            not isinstance(memory_key, str)
-            or not memory_key.strip()
-        ):
+        if not isinstance(memory_key, str) or not memory_key.strip():
             raise ValueError("memory_key 不能为空")
 
         normalized_memory_key = memory_key.strip()
@@ -94,7 +87,6 @@ class MemoryExecutionLocks:
         try:
             # STEP 6：获取锁。
             async with entry.lock:
-
                 # STEP 7：把锁交给调用方。
                 yield
 
@@ -104,8 +96,5 @@ class MemoryExecutionLocks:
             entry.users -= 1
 
             # STEP 9：没有任务使用或等待时，清理锁。
-            if (
-                entry.users == 0
-                and self._entries.get(lock_key) is entry
-            ):
+            if entry.users == 0 and self._entries.get(lock_key) is entry:
                 del self._entries[lock_key]

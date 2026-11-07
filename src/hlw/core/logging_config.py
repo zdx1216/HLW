@@ -102,6 +102,53 @@ def setup_logging(
 
     logger.addHandler(file_handler)
 
+    # ========================================================
+    # JSONL 结构化事件日志
+    # ========================================================
+
+    event_logger = logging.getLogger("hlw.events")
+
+    event_logger.setLevel(logging.INFO)
+
+    # 事件日志不向普通日志传播，确保 JSONL 保持纯 JSON 格式。
+    event_logger.propagate = False
+
+    # 清理旧 Handler，避免重复写入。
+    for handler in list(event_logger.handlers):
+        if getattr(
+            handler,
+            MANAGED_HANDLER_ATTR,
+            False,
+        ):
+            event_logger.removeHandler(handler)
+            handler.close()
+
+    event_file_handler = RotatingFileHandler(
+        filename=directory / "events.jsonl",
+        maxBytes=50 * 1024 * 1024,
+        backupCount=10,
+        encoding="utf-8",
+        delay=True,
+    )
+
+    event_file_handler.setLevel(logging.INFO)
+
+    # JSONL 每一行必须是独立 JSON，不能添加普通日志前缀。
+    event_file_handler.setFormatter(
+        logging.Formatter("%(message)s")
+    )
+
+    setattr(
+        event_file_handler,
+        MANAGED_HANDLER_ATTR,
+        True,
+    )
+
+    event_logger.addHandler(event_file_handler)
+
+    # 标记当前运行环境。
+    event_logger._hlw_runtime = runtime
+
     # 如果宿主没有配置 Root Handler，
     # HLW 自己提供控制台输出。
     if not logging.getLogger().handlers:

@@ -1,4 +1,3 @@
-
 """Start the HLW API with Windows-compatible asyncio."""
 
 import asyncio
@@ -30,9 +29,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     if sys.platform == "win32":
-        with asyncio.Runner(
-            loop_factory=asyncio.SelectorEventLoop
-        ) as runner:
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
     else:
         asyncio.run(main())

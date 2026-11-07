@@ -1,4 +1,3 @@
-
 """Tests for HLW session-level concurrency control."""
 
 import asyncio
@@ -14,10 +13,7 @@ class BlockingGraph:
 
     def __init__(self) -> None:
         self.started: asyncio.Queue[str] = asyncio.Queue()
-        self.release = {
-            name: asyncio.Event()
-            for name in ("A", "B", "C")
-        }
+        self.release = {name: asyncio.Event() for name in ("A", "B", "C")}
         self.active_threads: set[str] = set()
         self.active_count = 0
         self.max_active = 0
@@ -54,27 +50,17 @@ def test_same_thread_serialization() -> None:
         tasks = []
 
         try:
-            a = asyncio.create_task(
-                service.run("A", thread_id="thread-001")
-            )
+            a = asyncio.create_task(service.run("A", thread_id="thread-001"))
             tasks.append(a)
-            assert await asyncio.wait_for(
-                graph.started.get(), 2
-            ) == "A"
+            assert await asyncio.wait_for(graph.started.get(), 2) == "A"
 
-            c = asyncio.create_task(
-                service.run("C", thread_id="thread-001")
-            )
+            c = asyncio.create_task(service.run("C", thread_id="thread-001"))
             tasks.append(c)
 
-            b = asyncio.create_task(
-                service.run("B", thread_id="thread-002")
-            )
+            b = asyncio.create_task(service.run("B", thread_id="thread-002"))
             tasks.append(b)
 
-            assert await asyncio.wait_for(
-                graph.started.get(), 2
-            ) == "B"
+            assert await asyncio.wait_for(graph.started.get(), 2) == "B"
 
             assert graph.max_active == 2
 
@@ -89,9 +75,7 @@ def test_same_thread_serialization() -> None:
             graph.release["A"].set()
             await asyncio.wait_for(a, 2)
 
-            assert await asyncio.wait_for(
-                graph.started.get(), 2
-            ) == "C"
+            assert await asyncio.wait_for(graph.started.get(), 2) == "C"
 
             graph.release["C"].set()
             await asyncio.wait_for(c, 2)
@@ -118,26 +102,16 @@ def test_global_concurrency_limit() -> None:
         tasks = []
 
         try:
-            a = asyncio.create_task(
-                service.run("A", thread_id="thread-001")
-            )
+            a = asyncio.create_task(service.run("A", thread_id="thread-001"))
             tasks.append(a)
 
-            b = asyncio.create_task(
-                service.run("B", thread_id="thread-002")
-            )
+            b = asyncio.create_task(service.run("B", thread_id="thread-002"))
             tasks.append(b)
 
-            assert await asyncio.wait_for(
-                graph.started.get(), 2
-            ) == "A"
-            assert await asyncio.wait_for(
-                graph.started.get(), 2
-            ) == "B"
+            assert await asyncio.wait_for(graph.started.get(), 2) == "A"
+            assert await asyncio.wait_for(graph.started.get(), 2) == "B"
 
-            c = asyncio.create_task(
-                service.run("C", thread_id="thread-003")
-            )
+            c = asyncio.create_task(service.run("C", thread_id="thread-003"))
             tasks.append(c)
 
             await asyncio.sleep(0)
@@ -147,9 +121,7 @@ def test_global_concurrency_limit() -> None:
             graph.release["B"].set()
             await asyncio.wait_for(b, 2)
 
-            assert await asyncio.wait_for(
-                graph.started.get(), 2
-            ) == "C"
+            assert await asyncio.wait_for(graph.started.get(), 2) == "C"
 
             assert graph.max_active == 2
 

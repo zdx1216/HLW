@@ -1,4 +1,3 @@
-
 """HLW 用户身份标识校验模块。
 
 第一版采用单用户模式。
@@ -12,9 +11,7 @@ import re
 # 1. 长度为 1–64 个字符
 # 2. 只能包含英文字母、数字、下划线和连字符
 # 3. 第一个字符必须是字母或数字
-_USER_ID_PATTERN = re.compile(
-    r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
-)
+_USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
 def normalize_user_id(user_id: str) -> str:

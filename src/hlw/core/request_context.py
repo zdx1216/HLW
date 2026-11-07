@@ -1,4 +1,3 @@
-
 """HLW 异步任务请求上下文。"""
 
 from collections.abc import Generator

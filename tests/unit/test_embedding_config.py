@@ -1,4 +1,3 @@
-
 """HLW Embedding 配置单元测试。"""
 
 import pytest
@@ -28,10 +27,7 @@ def test_embedding_settings_defaults(monkeypatch):
 
     assert settings.embedding_model == "bge-m3:latest"
 
-    assert (
-        settings.embedding_base_url
-        == "http://127.0.0.1:11434"
-    )
+    assert settings.embedding_base_url == "http://127.0.0.1:11434"
 
     assert settings.embedding_dimensions == 1024
 
@@ -58,10 +54,7 @@ def test_embedding_settings_custom_values(monkeypatch):
 
     assert settings.embedding_model == "bge-m3:latest"
 
-    assert (
-        settings.embedding_base_url
-        == "http://localhost:11434"
-    )
+    assert settings.embedding_base_url == "http://localhost:11434"
 
     assert settings.embedding_dimensions == 1024
 

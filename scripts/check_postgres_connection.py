@@ -1,4 +1,3 @@
-
 """检查 HLW 与 PostgreSQL Checkpointer 的异步连接。"""
 
 import asyncio
@@ -27,9 +26,7 @@ def run() -> None:
         # Windows 默认的 ProactorEventLoop 不支持 add_reader，
         # 而 psycopg 异步连接依赖它，因此改用 SelectorEventLoop。
         # Runner 负责创建循环，并在退出时清理未完成的任务。
-        with asyncio.Runner(
-            loop_factory=asyncio.SelectorEventLoop
-        ) as runner:
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
     else:
         asyncio.run(main())

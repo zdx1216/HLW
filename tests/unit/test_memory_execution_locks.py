@@ -1,4 +1,3 @@
-
 """HLW MemoryExecutionLocks 单元测试。
 
 验证：
@@ -119,12 +118,8 @@ async def test_different_memories_allow_concurrency(
             await release_tasks.wait()
 
     tasks = [
-        asyncio.create_task(
-            worker("coding_style")
-        ),
-        asyncio.create_task(
-            worker("work_project")
-        ),
+        asyncio.create_task(worker("coding_style")),
+        asyncio.create_task(worker("work_project")),
     ]
 
     try:
@@ -167,12 +162,8 @@ async def test_different_users_allow_concurrency(
             await release_tasks.wait()
 
     tasks = [
-        asyncio.create_task(
-            worker("user_001")
-        ),
-        asyncio.create_task(
-            worker("user_002")
-        ),
+        asyncio.create_task(worker("user_001")),
+        asyncio.create_task(worker("user_002")),
     ]
 
     try:
@@ -195,7 +186,6 @@ async def test_exception_releases_memory_lock(
     """任务发生异常后，锁必须正确释放。"""
 
     with pytest.raises(RuntimeError):
-
         async with memory_locks.hold(
             "user_001",
             "coding_style",
@@ -244,9 +234,7 @@ async def test_cancelled_waiter_cleanup(
         # 让第二个任务进入锁等待阶段。
         await asyncio.sleep(0)
 
-        entry = memory_locks._entries[
-            ("user_001", "coding_style")
-        ]
+        entry = memory_locks._entries[("user_001", "coding_style")]
 
         # 一个持锁，一个等待，共两个使用者。
         assert entry.users == 2
@@ -266,6 +254,7 @@ async def test_cancelled_waiter_cleanup(
 
     # 所有任务结束后，锁对象应该被清理。
     assert memory_locks._entries == {}
+
 
 @pytest.mark.anyio
 async def test_user_id_is_normalized_before_lock_key(

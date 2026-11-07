@@ -1,4 +1,5 @@
 """HLW 受控回退策略测试。"""
+
 import asyncio
 import json
 import logging
@@ -15,6 +16,7 @@ from hlw.models.resilience import ControlledFallbackMiddleware
 @dataclass(frozen=True)
 class FakeRequest:
     model: str
+
     def override(self, *, model: str):
         return FakeRequest(model=model)
 
@@ -174,6 +176,7 @@ def test_async_fallback():
         "fallback",
     ]
 
+
 def test_telemetry_primary_success(caplog):
     """主模型成功时自动生成正确的事件。"""
 
@@ -191,16 +194,11 @@ def test_telemetry_primary_success(caplog):
             handler,
         )
 
-    records = [
-        r for r in caplog.records
-        if r.name == "hlw.models.telemetry"
-    ]
+    records = [r for r in caplog.records if r.name == "hlw.models.telemetry"]
 
     assert len(records) == 1
 
-    payload = json.loads(
-        records[0].getMessage().removeprefix("model_call ")
-    )
+    payload = json.loads(records[0].getMessage().removeprefix("model_call "))
 
     assert payload["status"] == "success"
     assert payload["model_name"] == "primary"
@@ -231,16 +229,11 @@ def test_telemetry_fallback_success(caplog):
 
     assert result == "fallback-ok"
 
-    records = [
-        r for r in caplog.records
-        if r.name == "hlw.models.telemetry"
-    ]
+    records = [r for r in caplog.records if r.name == "hlw.models.telemetry"]
 
     assert len(records) == 1
 
-    payload = json.loads(
-        records[0].getMessage().removeprefix("model_call ")
-    )
+    payload = json.loads(records[0].getMessage().removeprefix("model_call "))
 
     assert payload["status"] == "success"
     assert payload["primary_model"] == "primary"

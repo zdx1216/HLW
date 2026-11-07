@@ -1,4 +1,3 @@
-
 """P0-02B：真实 Ollama 模型 Fallback 故障注入。"""
 
 import asyncio
@@ -33,15 +32,8 @@ graph = create_deep_agent(
     model=broken_primary,
     backend=StateBackend(),
     tools=[get_project_status],
-    middleware=[
-        ModelFallbackMiddleware(
-            working_fallback
-        )
-    ],
-    system_prompt=(
-        "你是 HLW 模型容错测试助手。"
-        "请使用中文简短回答用户。"
-    ),
+    middleware=[ModelFallbackMiddleware(working_fallback)],
+    system_prompt=("你是 HLW 模型容错测试助手。请使用中文简短回答用户。"),
 )
 
 

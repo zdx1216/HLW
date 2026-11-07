@@ -1,4 +1,3 @@
-
 """HLW PostgreSQL Memory 并发安全实验。
 
 实验一：
@@ -103,7 +102,6 @@ async def main() -> None:
     key = "concurrency_probe"
 
     async with open_postgres_store() as store:
-
         # 创建共享数据库管理器。
         manager = ObservedMemoryManager(store)
 
@@ -118,7 +116,6 @@ async def main() -> None:
         )
 
         try:
-
             # =====================================
             # 实验一：同一用户、同一条记忆
             # =====================================
@@ -151,10 +148,7 @@ async def main() -> None:
                 ),
             )
 
-            statuses = [
-                result.status
-                for result in results
-            ]
+            statuses = [result.status for result in results]
 
             print("Request A/B statuses:", statuses)
 
@@ -182,9 +176,7 @@ async def main() -> None:
                 "喜欢英文代码注释",
             ]
 
-            print(
-                "STEP 1: Same-user serialization PASS"
-            )
+            print("STEP 1: Same-user serialization PASS")
 
             # =====================================
             # 实验二：不同用户、相同记忆 key
@@ -217,10 +209,7 @@ async def main() -> None:
                 ),
             )
 
-            statuses = [
-                result.status
-                for result in results
-            ]
+            statuses = [result.status for result in results]
 
             print("Request A/B statuses:", statuses)
 
@@ -251,16 +240,11 @@ async def main() -> None:
             assert memory_a["content"] == "用户 A 的记忆"
             assert memory_b["content"] == "用户 B 的记忆"
 
-            print(
-                "STEP 2: Different-user concurrency PASS"
-            )
+            print("STEP 2: Different-user concurrency PASS")
 
-            print(
-                "\nRESULT: PostgreSQL Memory concurrency PASS"
-            )
+            print("\nRESULT: PostgreSQL Memory concurrency PASS")
 
         finally:
-
             # 清理本次实验数据。
             await manager.delete_memory(
                 user_same,
@@ -282,9 +266,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     if sys.platform == "win32":
-        with asyncio.Runner(
-            loop_factory=asyncio.SelectorEventLoop
-        ) as runner:
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
     else:
         asyncio.run(main())

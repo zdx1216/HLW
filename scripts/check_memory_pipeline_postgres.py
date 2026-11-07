@@ -1,4 +1,3 @@
-
 """HLW MemoryPipeline PostgreSQL 集成测试。"""
 
 import asyncio
@@ -25,9 +24,7 @@ class FakeMemoryExtractor(MemoryExtractor):
         self,
         candidates: list[MemoryCandidate],
     ) -> None:
-        self._result = MemoryExtractionResult(
-            candidates=candidates
-        )
+        self._result = MemoryExtractionResult(candidates=candidates)
 
     async def extract(
         self,
@@ -91,7 +88,6 @@ async def main() -> None:
     key = "coding_style"
 
     async with open_postgres_store() as store:
-
         # STEP 0：创建统一的数据库管理器和并发锁。
         manager = MemoryManager(store)
 
@@ -117,10 +113,7 @@ async def main() -> None:
                 user_message="以后请给我提供详细中文代码注释。",
             )
 
-            assert (
-                result_a.deduplication_results[0].status
-                == "created"
-            )
+            assert result_a.deduplication_results[0].status == "created"
 
             saved_a = await manager.get_memory(
                 user_a,
@@ -138,10 +131,7 @@ async def main() -> None:
                 user_message="以后请给我提供详细中文代码注释。",
             )
 
-            assert (
-                unchanged_result.deduplication_results[0].status
-                == "unchanged"
-            )
+            assert unchanged_result.deduplication_results[0].status == "unchanged"
 
             print("STEP 2: Duplicate memory detection PASS")
 
@@ -162,10 +152,7 @@ async def main() -> None:
                 user_message="我现在更喜欢简洁英文代码注释。",
             )
 
-            assert (
-                conflict_result.deduplication_results[0].status
-                == "conflict"
-            )
+            assert conflict_result.deduplication_results[0].status == "conflict"
 
             # 验证原来的记忆没有被覆盖。
             saved_a = await manager.get_memory(
@@ -195,10 +182,7 @@ async def main() -> None:
                 user_message="我喜欢简洁英文代码注释。",
             )
 
-            assert (
-                result_b.deduplication_results[0].status
-                == "created"
-            )
+            assert result_b.deduplication_results[0].status == "created"
 
             # 验证用户 A 和用户 B 的记忆相互隔离。
             memory_a = await manager.get_memory(
@@ -219,9 +203,7 @@ async def main() -> None:
 
             print("STEP 4: Multi-user memory isolation PASS")
 
-            print(
-                "RESULT: PostgreSQL MemoryPipeline integration PASS"
-            )
+            print("RESULT: PostgreSQL MemoryPipeline integration PASS")
 
         finally:
             # 清理本次测试产生的数据。
@@ -233,9 +215,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     if sys.platform == "win32":
-        with asyncio.Runner(
-            loop_factory=asyncio.SelectorEventLoop
-        ) as runner:
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             runner.run(main())
     else:
         asyncio.run(main())

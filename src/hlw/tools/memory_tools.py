@@ -1,4 +1,3 @@
-
 """HLW Agent 长期记忆检索工具。"""
 
 import json
@@ -61,11 +60,7 @@ async def _search_user_memories(
                 "key": item["key"],
                 "category": item.get("category"),
                 "content": item["content"],
-                "score": (
-                    float(score)
-                    if score is not None
-                    else None
-                ),
+                "score": (float(score) if score is not None else None),
             }
         )
 

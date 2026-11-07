@@ -1,4 +1,3 @@
-
 """HLW Agent Service 身份传递及执行逻辑测试。"""
 
 import asyncio
@@ -149,11 +148,7 @@ def test_service_limits_concurrency():
 
     assert peak == 2
 
-    assert [
-        item["request_id"] for item in results
-    ] == [
-        f"req-{i}" for i in range(8)
-    ]
+    assert [item["request_id"] for item in results] == [f"req-{i}" for i in range(8)]
 
 
 def test_service_propagates_errors():

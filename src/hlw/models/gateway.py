@@ -1,4 +1,3 @@
-
 """HLW Model Gateway：模型注册和客户端创建。"""
 
 from typing import Literal
@@ -39,10 +38,10 @@ def build_model(role: ModelRole) -> ChatOpenAI:
         raise ValueError("模型超时必须大于零")
 
     return ChatOpenAI(
-            model=models[role],
-            base_url=settings.ollama_base_url,
-            api_key="ollama",
-            temperature=0,
-            timeout=settings.model_timeout_seconds,
-            max_retries=0,
-        )
+        model=models[role],
+        base_url=settings.ollama_base_url,
+        api_key="ollama",
+        temperature=0,
+        timeout=settings.model_timeout_seconds,
+        max_retries=0,
+    )
