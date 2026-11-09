@@ -1,3 +1,4 @@
+
 """HLW 长期记忆工具测试。"""
 
 import json
@@ -7,6 +8,7 @@ import pytest
 from langchain_core.embeddings import Embeddings
 from langgraph.store.memory import InMemoryStore
 
+from hlw.core.config import settings
 from hlw.memory.manager import MemoryManager
 from hlw.tools.memory_tools import (
     _search_user_memories,
@@ -45,14 +47,17 @@ def create_store() -> InMemoryStore:
     )
 
 
-def create_runtime(store, user_id):
+def create_runtime(store, user_id=None):
     """模拟 Agent 注入的运行时对象。"""
+
+    configurable = {}
+
+    if user_id is not None:
+        configurable["user_id"] = user_id
 
     return SimpleNamespace(
         config={
-            "configurable": {
-                "user_id": user_id,
-            }
+            "configurable": configurable,
         },
         store=store,
     )
@@ -65,17 +70,23 @@ async def test_search_user_memories():
     store = create_store()
     manager = MemoryManager(store)
 
-    # 用户1的记忆
+    # 当前服务端用户的记忆
     await manager.save_memory(
-        user_id="user_001",
+        user_id=settings.user_id,
         key="learning_style",
         content="喜欢详细的中文代码注释",
         category="preference",
     )
 
-    # 用户2的记忆
+    # 其他用户的记忆
+    other_user_id = (
+        "user_002"
+        if settings.user_id != "user_002"
+        else "user_001"
+    )
+
     await manager.save_memory(
-        user_id="user_002",
+        user_id=other_user_id,
         key="learning_style",
         content="喜欢简洁的英文注释",
         category="preference",
@@ -83,7 +94,7 @@ async def test_search_user_memories():
 
     runtime = create_runtime(
         store=store,
-        user_id="user_001",
+        user_id=settings.user_id,
     )
 
     result = await _search_user_memories(
@@ -94,26 +105,37 @@ async def test_search_user_memories():
     data = json.loads(result)
 
     assert data["count"] == 1
-
     assert data["memories"][0]["key"] == "learning_style"
-
-    assert data["memories"][0]["content"] == ("喜欢详细的中文代码注释")
+    assert data["memories"][0]["content"] == "喜欢详细的中文代码注释"
 
 
 @pytest.mark.anyio
-async def test_missing_user_id():
-    """测试缺少用户身份时拒绝检索。"""
+async def test_missing_runtime_user_id_uses_server_identity():
+    """缺少 configurable.user_id 时使用服务端身份。"""
 
-    runtime = SimpleNamespace(
-        config={"configurable": {}},
-        store=create_store(),
+    store = create_store()
+    manager = MemoryManager(store)
+
+    await manager.save_memory(
+        user_id=settings.user_id,
+        key="server_identity",
+        content="这是服务端身份检索测试",
+        category="fact",
     )
 
-    with pytest.raises(RuntimeError, match="user_id"):
-        await _search_user_memories(
-            query="我的偏好",
-            runtime=runtime,
-        )
+    runtime = create_runtime(
+        store=store,
+    )
+
+    result = await _search_user_memories(
+        query="服务端身份检索测试",
+        runtime=runtime,
+    )
+
+    data = json.loads(result)
+
+    assert data["count"] == 1
+    assert data["memories"][0]["content"] == "这是服务端身份检索测试"
 
 
 @pytest.mark.anyio
@@ -133,12 +155,34 @@ async def test_invalid_user_id():
 
 
 @pytest.mark.anyio
+async def test_mismatched_user_id():
+    """测试客户端不能伪造其他用户身份。"""
+
+    other_user_id = (
+        "user_002"
+        if settings.user_id != "user_002"
+        else "user_001"
+    )
+
+    runtime = create_runtime(
+        store=create_store(),
+        user_id=other_user_id,
+    )
+
+    with pytest.raises(PermissionError, match="不一致"):
+        await _search_user_memories(
+            query="我的偏好",
+            runtime=runtime,
+        )
+
+
+@pytest.mark.anyio
 async def test_missing_store():
     """测试没有 Store 时拒绝检索。"""
 
     runtime = create_runtime(
         store=None,
-        user_id="user_001",
+        user_id=settings.user_id,
     )
 
     with pytest.raises(RuntimeError, match="Store"):
@@ -151,18 +195,18 @@ async def test_missing_store():
 def test_tool_definition():
     """验证工具注册及模型可见参数。"""
 
-    # 工具名称正确
-    assert search_user_memories.name == ("search_user_memories")
+    assert search_user_memories.name == "search_user_memories"
 
-    # 模型只能看到 query 参数
-    model_fields = set(search_user_memories.tool_call_schema.model_fields)
+    model_fields = set(
+        search_user_memories.tool_call_schema.model_fields
+    )
 
     assert model_fields == {"query"}
 
 
 @pytest.mark.anyio
 async def test_invalid_configurable_type():
-    """测试 configurable 类型错误时抛出 TypeError。"""
+    """测试 configurable 类型错误。"""
 
     runtime = SimpleNamespace(
         config={
@@ -171,10 +215,7 @@ async def test_invalid_configurable_type():
         store=create_store(),
     )
 
-    with pytest.raises(
-        TypeError,
-        match="configurable",
-    ):
+    with pytest.raises(TypeError, match="configurable"):
         await _search_user_memories(
             query="我的偏好",
             runtime=runtime,
