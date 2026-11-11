@@ -210,3 +210,77 @@ def test_service_assigns_unique_run_id():
     assert len(run_ids) == 2
     assert all(isinstance(value, UUID) for value in run_ids)
     assert run_ids[0] != run_ids[1]
+
+@pytest.mark.parametrize("approved", [True, False])
+def test_service_resumes_with_approval(approved):
+    """?? AgentService ????????????"""
+
+    from langgraph.types import Command
+
+    class CapturingGraph:
+        def __init__(self):
+            self.inputs = None
+            self.config = None
+
+        async def ainvoke(self, inputs, config):
+            self.inputs = inputs
+            self.config = config
+
+            return {
+                "approved": inputs.resume,
+                "thread_id": config["configurable"]["thread_id"],
+                "user_id": config["configurable"]["user_id"],
+                "request_id": get_request_id(),
+                "metadata_id": config["metadata"]["request_id"],
+            }
+
+    graph = CapturingGraph()
+
+    async def scenario():
+        service = AgentService(
+            agent_graph=graph,
+            max_concurrent=2,
+        )
+
+        return await service.resume(
+            approved,
+            thread_id="thread-resume",
+            request_id="req-resume",
+        )
+
+    result = asyncio.run(scenario())
+
+    # ?????? LangGraph Command
+    assert isinstance(graph.inputs, Command)
+
+    # ???????
+    assert graph.inputs.resume is approved
+    assert result["approved"] is approved
+
+    # ???????????
+    assert result["thread_id"] == "thread-resume"
+    assert result["user_id"] == settings.user_id
+
+    # ???????????
+    assert result["request_id"] == "req-resume"
+    assert result["metadata_id"] == "req-resume"
+
+    # ???????????
+    assert get_request_id() == "-"
+
+
+def test_service_rejects_non_boolean_resume_approval():
+    """???????????????"""
+
+    async def scenario():
+        service = AgentService(
+            agent_graph=FakeGraph(),
+        )
+
+        with pytest.raises(TypeError, match="approved"):
+            await service.resume(
+                "yes",
+                thread_id="thread-resume",
+            )
+
+    asyncio.run(scenario())

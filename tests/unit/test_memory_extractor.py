@@ -15,7 +15,7 @@ from hlw.memory.extractor import MemoryExtractor
 class FakeStructuredModel:
     """模拟结构化 LLM 的返回结果。"""
 
-    def __init__(self, result: dict[str, Any]):
+    def __init__(self, result: Any):
         self.result = result
         self.calls = 0
         self.messages = None
@@ -139,3 +139,16 @@ def test_reject_empty_user_message() -> None:
         asyncio.run(extractor.extract("   "))
 
     assert fake_model.calls == 0
+
+def test_none_result_returns_empty_extraction() -> None:
+    """???? None ????????????"""
+
+    message = "?????????????"
+
+    fake_model = FakeStructuredModel(None)
+    extractor = MemoryExtractor(structured_model=fake_model)
+
+    result = asyncio.run(extractor.extract(message))
+
+    assert result.candidates == []
+    assert fake_model.calls == 1

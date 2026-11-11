@@ -112,6 +112,9 @@ class MemoryExtractor:
         raw_result = await self._model.ainvoke(messages)
 
         # 再次进行 Pydantic 校验，确保输出格式正确。
+        if raw_result is None:
+            return MemoryExtractionResult(candidates=[])
+
         result = MemoryExtractionResult.model_validate(raw_result)
 
         # 只保留能够在原始用户消息中找到证据的记忆。

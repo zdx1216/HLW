@@ -5,6 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import Command
 
 from hlw.core.concurrency import AgentConcurrencyLimiter
 from hlw.core.config import settings
@@ -149,6 +150,96 @@ class AgentService:
 
             logger.info(
                 "Agent request completed request_id=%s user_id=%s",
+                rid,
+                self._user_id,
+            )
+
+            return result
+
+    async def resume(
+        self,
+        approved: bool,
+        *,
+        thread_id: str,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """????????? LangGraph ???"""
+
+        # 1. ????????
+        if not isinstance(approved, bool):
+            raise TypeError("approved ??? bool")
+
+        # 2. ???? ID
+        if not isinstance(thread_id, str) or not thread_id.strip():
+            raise ValueError("thread_id ????")
+
+        # 3. ??????? ID
+        rid = uuid4().hex if request_id is None else request_id
+
+        if (
+            not isinstance(rid, str)
+            or not rid.strip()
+            or "\n" in rid
+            or "\r" in rid
+        ):
+            raise ValueError("request_id ?????")
+
+        # 4. ??????
+        run_id = uuid4()
+
+        config: RunnableConfig = {
+            "run_id": run_id,
+            "configurable": {
+                "thread_id": thread_id,
+                "user_id": self._user_id,
+            },
+            "metadata": {
+                "request_id": rid,
+                "user_id": self._user_id,
+            },
+            "recursion_limit": 30,
+        }
+
+        # 5. ?? LangGraph ????
+        async def resume_graph() -> dict[str, Any]:
+            return await self._graph.ainvoke(
+                Command(resume=approved),
+                config=config,
+            )
+
+        # 6. ??????
+        with request_context(rid):
+            logger.info(
+                "Agent resume started request_id=%s "
+                "user_id=%s thread_id=%s approved=%s",
+                rid,
+                self._user_id,
+                thread_id,
+                approved,
+            )
+
+            try:
+                async with self._thread_locks.hold(thread_id):
+                    result = await self._limiter.run(resume_graph)
+
+            except asyncio.CancelledError:
+                logger.warning(
+                    "Agent resume cancelled request_id=%s user_id=%s",
+                    rid,
+                    self._user_id,
+                )
+                raise
+
+            except Exception:
+                logger.exception(
+                    "Agent resume failed request_id=%s user_id=%s",
+                    rid,
+                    self._user_id,
+                )
+                raise
+
+            logger.info(
+                "Agent resume completed request_id=%s user_id=%s",
                 rid,
                 self._user_id,
             )

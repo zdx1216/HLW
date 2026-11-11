@@ -98,3 +98,6 @@ class MemoryExecutionLocks:
             # STEP 9：没有任务使用或等待时，清理锁。
             if entry.users == 0 and self._entries.get(lock_key) is entry:
                 del self._entries[lock_key]
+
+# ???????????
+memory_execution_locks = MemoryExecutionLocks()

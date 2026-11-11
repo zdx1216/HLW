@@ -4,6 +4,12 @@ from hlw.agent.execution_observability import (
     AgentRunAuditMiddleware,
 )
 from hlw.agent.graph import graph, model
+from hlw.agent.memory_capture_middleware import (
+    MemoryCaptureMiddleware,
+)
+from hlw.agent.memory_context_middleware import (
+    MemoryContextMiddleware,
+)
 from hlw.agent.model_observability import (
     ModelAttemptLoggingMiddleware,
     ModelCallAuditMiddleware,
@@ -158,13 +164,15 @@ def test_graph_modes_share_business_configuration(monkeypatch):
 
     # 5. Middleware 类型和顺序一致
     expected_types = [
-        AgentRunAuditMiddleware,
-        RequestContextMiddleware,
-        ToolCallAuditMiddleware,
-        ModelCallAuditMiddleware,
-        ControlledFallbackMiddleware,
-        ModelAttemptLoggingMiddleware,
-    ]
+            AgentRunAuditMiddleware,
+            RequestContextMiddleware,
+            MemoryContextMiddleware,
+            MemoryCaptureMiddleware,
+            ToolCallAuditMiddleware,
+            ModelCallAuditMiddleware,
+            ControlledFallbackMiddleware,
+            ModelAttemptLoggingMiddleware,
+        ]
 
     assert [type(item) for item in normal_config["middleware"]] == expected_types
 

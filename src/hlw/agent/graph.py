@@ -10,6 +10,12 @@ from langgraph.store.base import BaseStore
 from hlw.agent.execution_observability import (
     AgentRunAuditMiddleware,
 )
+from hlw.agent.memory_capture_middleware import (
+    MemoryCaptureMiddleware,
+)
+from hlw.agent.memory_context_middleware import (
+    MemoryContextMiddleware,
+)
 from hlw.agent.model_observability import (
     ModelAttemptLoggingMiddleware,
     ModelCallAuditMiddleware,
@@ -104,7 +110,6 @@ def build_agent_graph(
     # --------------------------------------------------------
     # STEP 1：统一构建 Graph 配置
     # --------------------------------------------------------
-
     graph_kwargs: dict[str, Any] = {
         "model": model,
         "backend": StateBackend(),
@@ -115,6 +120,13 @@ def build_agent_graph(
         "middleware": [
             AgentRunAuditMiddleware(),
             RequestContextMiddleware(),
+
+            # 先加载历史长期记忆
+            MemoryContextMiddleware(),
+
+            # 再捕获当前用户的新记忆
+            MemoryCaptureMiddleware(),
+
             ToolCallAuditMiddleware(),
             ModelCallAuditMiddleware(),
             build_fallback_middleware(),
@@ -122,7 +134,6 @@ def build_agent_graph(
         ],
         "system_prompt": SYSTEM_PROMPT,
     }
-
     # --------------------------------------------------------
     # STEP 2：按需注入持久化组件
     # --------------------------------------------------------
