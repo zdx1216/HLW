@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 from langgraph.store.base import BaseStore
 
 from hlw.core.identity import normalize_user_id
+from hlw.memory.execution_locks import memory_execution_locks
 from hlw.memory.schemas import MemoryCandidate
 
 
@@ -91,48 +92,100 @@ class PendingMemoryManager:
         candidate: MemoryCandidate,
         existing_snapshot: dict[str, Any],
     ) -> dict[str, Any]:
-        """创建一条独立的待确认记忆记录。
+        """创建待确认记录，复用语义相同的未处理记录。
 
-        不会修改原有长期记忆。
-        每次创建都会分配独立 UUID。
+        去重条件：
+        1. 同一个用户。
+        2. 相同的记忆 key。
+        3. 相同的 category 和 content。
+        4. 相同的原始记忆快照。
+
+        evidence 可以不同，不影响记忆更新目标。
+
+        已删除或已处理的记录不复用。
         """
 
-        # STEP 1：构建用户命名空间。
+        # STEP 1：构建当前用户的独立命名空间。
         namespace = self._build_namespace(user_id)
 
-        # STEP 2：检查候选记忆类型。
+        # STEP 2：验证候选记忆。
         if not isinstance(candidate, MemoryCandidate):
             raise TypeError(
                 "candidate 必须是 MemoryCandidate 类型"
             )
 
-        # STEP 3：校验并复制原记忆快照。
+        # STEP 3：验证并复制原始快照。
         snapshot = self._validate_snapshot(existing_snapshot)
+        candidate_data = candidate.model_dump(mode="json")
 
-        # STEP 4：生成唯一待确认 ID。
-        pending_id = str(uuid4())
+        # STEP 4：对同一用户、同一记忆 key 的创建操作加锁。
+        # 该锁仅保证同一进程内的串行操作。
+        async with memory_execution_locks.hold(
+            user_id,
+            f"pending-create:{candidate.key}",
+        ):
+            # STEP 5：分页查找现有待确认记录。
+            # 不只读取第一页，避免遗漏旧记录。
+            page_size = 100
+            offset = 0
 
-        # STEP 5：记录 UTC 时间。
-        now = datetime.now(UTC).isoformat()
+            while True:
+                records = await self.list_pending(
+                    user_id=user_id,
+                    limit=page_size,
+                    offset=offset,
+                )
 
-        # STEP 6：构建待确认记录。
-        record = {
-            "pending_id": pending_id,
-            "candidate": candidate.model_dump(mode="json"),
-            "existing_snapshot": snapshot,
-            "status": "pending",
-            "created_at": now,
-            "updated_at": now,
-        }
+                for record in records:
+                    stored_candidate = record.get("candidate")
 
-        # STEP 7：保存到独立命名空间。
-        await self._store.aput(
-            namespace,
-            pending_id,
-            record,
-        )
+                    if not isinstance(stored_candidate, dict):
+                        continue
 
-        return record
+                    same_candidate = (
+                        stored_candidate.get("key")
+                        == candidate_data["key"]
+                        and stored_candidate.get("category")
+                        == candidate_data["category"]
+                        and stored_candidate.get("content")
+                        == candidate_data["content"]
+                    )
+
+                    same_snapshot = (
+                        record.get("existing_snapshot") == snapshot
+                    )
+
+                    if same_candidate and same_snapshot:
+                        # 已有相同待确认记录，直接复用。
+                        # 不修改原记录和创建时间。
+                        return record
+
+                if len(records) < page_size:
+                    break
+
+                offset += page_size
+
+            # STEP 6：确实不存在相同 Pending，创建新 UUID。
+            pending_id = str(uuid4())
+            now = datetime.now(UTC).isoformat()
+
+            record = {
+                "pending_id": pending_id,
+                "candidate": candidate_data,
+                "existing_snapshot": snapshot,
+                "status": "pending",
+                "created_at": now,
+                "updated_at": now,
+            }
+
+            # STEP 7：写入 Store。
+            await self._store.aput(
+                namespace,
+                pending_id,
+                record,
+            )
+
+            return record
 
     async def get_pending(
         self,

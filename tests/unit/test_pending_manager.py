@@ -156,10 +156,14 @@ async def test_list_pending(manager):
 
     second = await manager.create_pending(
         "user_001",
-        make_candidate(),
+        MemoryCandidate(
+            key="coding_style",
+            category="preference",
+            content="喜欢简短的英文代码注释",
+            evidence="简短的英文代码注释",
+        ),
         make_snapshot(),
     )
-
     await manager.create_pending(
         "user_002",
         make_candidate(),
@@ -190,16 +194,21 @@ async def test_list_pending_pagination(manager):
     """测试待确认记录分页。"""
 
     created_ids = set()
+    for index in range(4):
+        candidate = MemoryCandidate(
+            key="coding_style",
+            category="preference",
+            content=f"喜欢英文代码注释版本{index}",
+            evidence=f"英文代码注释版本{index}",
+        )
 
-    for _ in range(4):
         record = await manager.create_pending(
             "user_001",
-            make_candidate(),
+            candidate,
             make_snapshot(),
         )
 
         created_ids.add(record["pending_id"])
-
     page_1 = await manager.list_pending(
         "user_001",
         limit=2,
@@ -455,3 +464,64 @@ async def test_create_pending_does_not_modify_original_snapshot(
     )
 
     assert snapshot["content"] == original_content
+
+@pytest.mark.anyio
+async def test_create_pending_reuses_identical_record(manager):
+    """相同记忆目标和快照应复用已有 Pending。"""
+
+    candidate = make_candidate()
+    snapshot = make_snapshot()
+
+    first = await manager.create_pending(
+        user_id="user_001",
+        candidate=candidate,
+        existing_snapshot=snapshot,
+    )
+
+    # evidence 改变，但 key/category/content 不变。
+    second_candidate = candidate.model_copy(
+        update={"evidence": "英文代码注释"}
+    )
+
+    second = await manager.create_pending(
+        user_id="user_001",
+        candidate=second_candidate,
+        existing_snapshot=snapshot,
+    )
+
+    assert second["pending_id"] == first["pending_id"]
+    assert second["created_at"] == first["created_at"]
+
+    records = await manager.list_pending("user_001")
+
+    assert len(records) == 1
+    assert records[0]["pending_id"] == first["pending_id"]
+
+
+@pytest.mark.anyio
+async def test_create_pending_after_delete_uses_new_id(manager):
+    """已删除的 Pending 不得复用旧 UUID。"""
+
+    first = await manager.create_pending(
+        user_id="user_001",
+        candidate=make_candidate(),
+        existing_snapshot=make_snapshot(),
+    )
+
+    await manager.delete_pending(
+        user_id="user_001",
+        pending_id=first["pending_id"],
+    )
+
+    second = await manager.create_pending(
+        user_id="user_001",
+        candidate=make_candidate(),
+        existing_snapshot=make_snapshot(),
+    )
+
+    assert first["pending_id"] != second["pending_id"]
+
+    records = await manager.list_pending("user_001")
+
+    assert len(records) == 1
+    assert records[0]["pending_id"] == second["pending_id"]

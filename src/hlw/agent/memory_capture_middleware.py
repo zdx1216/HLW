@@ -6,7 +6,8 @@
 2. 调用 MemoryExtractor 提取候选记忆。
 3. 调用 MemoryValidator 校验候选记忆。
 4. 调用 MemoryDeduplicator 判断新增、重复和冲突。
-5. 将符合条件的新记忆写入 PostgreSQL Store。
+5. 将新记忆写入 PostgreSQL Store。
+6. 将冲突记忆写入 PendingMemoryManager。
 
 安全原则：
 - user_id 使用服务端可信配置。
@@ -30,6 +31,7 @@ from hlw.memory.deduplicator import MemoryDeduplicator
 from hlw.memory.execution_locks import memory_execution_locks
 from hlw.memory.extractor import MemoryExtractor
 from hlw.memory.manager import MemoryManager
+from hlw.memory.pending_manager import PendingMemoryManager
 from hlw.memory.pipeline import MemoryPipeline
 from hlw.memory.validator import MemoryValidator
 
@@ -47,22 +49,17 @@ class MemoryCaptureMiddleware(AgentMiddleware):
 
         extractor 允许测试时注入模拟提取器。
         """
-
         self._extractor = extractor
         self._validator = MemoryValidator()
 
-        # 同一个 Middleware 实例共享记忆执行锁。
+        # 与确认服务共享进程内记忆锁。
         self._execution_locks = memory_execution_locks
 
     @staticmethod
     def _extract_latest_user_message(
         request: ModelRequest[Any],
     ) -> str | None:
-        """只提取当前模型请求最后一条用户消息。
-
-        不处理 AIMessage 和 ToolMessage，
-        避免工具调用循环中重复提取同一条用户消息。
-        """
+        """只提取模型请求中最后一条用户消息。"""
 
         messages = getattr(request, "messages", None)
 
@@ -79,7 +76,7 @@ class MemoryCaptureMiddleware(AgentMiddleware):
         if isinstance(content, str):
             return content.strip() or None
 
-        # 兼容多模态消息，只提取其中的文本部分。
+        # 兼容多模态消息中的文本内容。
         if isinstance(content, list):
             text_parts = []
 
@@ -97,7 +94,6 @@ class MemoryCaptureMiddleware(AgentMiddleware):
                         text_parts.append(text)
 
             combined = "\n".join(text_parts).strip()
-
             return combined or None
 
         return None
@@ -110,9 +106,9 @@ class MemoryCaptureMiddleware(AgentMiddleware):
             Awaitable[ModelResponse[Any]],
         ],
     ) -> ModelResponse[Any]:
-        """在模型调用之前自动执行记忆捕获。"""
+        """在模型调用之前执行自动长期记忆捕获。"""
 
-        # STEP 1：获取当前用户消息。
+        # STEP 1：提取当前用户消息。
         user_message = self._extract_latest_user_message(
             request
         )
@@ -120,7 +116,7 @@ class MemoryCaptureMiddleware(AgentMiddleware):
         if not user_message:
             return await handler(request)
 
-        # STEP 2：从 Runtime 获取 PostgreSQL Store。
+        # STEP 2：获取 Runtime Store。
         runtime = request.runtime
         store = getattr(runtime, "store", None)
 
@@ -131,50 +127,59 @@ class MemoryCaptureMiddleware(AgentMiddleware):
             return await handler(request)
 
         try:
-            # STEP 3：初始化提取器。
-            # 只有持久化模式才需要创建。
+            # STEP 3：初始化记忆提取器。
             if self._extractor is None:
                 self._extractor = MemoryExtractor()
 
-            # STEP 4：创建统一记忆管理器。
+            # STEP 4：创建正式记忆管理器。
             manager = MemoryManager(store)
 
-            # STEP 5：构建记忆处理流水线。
+            # STEP 5：创建待确认记忆管理器。
+            pending_manager = PendingMemoryManager(store)
+
+            # STEP 6：创建记忆去重器。
             deduplicator = MemoryDeduplicator(
                 manager=manager,
                 execution_locks=self._execution_locks,
             )
 
+            # STEP 7：组装完整记忆流水线。
             pipeline = MemoryPipeline(
                 extractor=self._extractor,
                 validator=self._validator,
                 deduplicator=deduplicator,
+                pending_manager=pending_manager,
             )
 
-            # STEP 6：执行自动记忆提取、校验和去重。
+            # STEP 8：运行提取、校验、去重与 Pending 创建。
             result = await pipeline.run(
                 user_id=settings.user_id,
                 user_message=user_message,
             )
 
-            # STEP 7：统计处理结果。
+            # STEP 9：记录处理结果。
             statuses = [
                 item.status
                 for item in result.deduplication_results
             ]
+
             logger.info(
                 "Automatic memory capture completed "
-                "candidates=%d accepted=%d statuses=%s",
+                "candidates=%d accepted=%d "
+                "statuses=%s pending_count=%d",
                 len(result.extraction.candidates),
                 len(result.validation.accepted),
                 statuses,
+                len(result.pending_updates),
             )
+
         except Exception:
+            # 记忆子系统故障不能阻断正常对话。
             logger.exception(
                 "Automatic memory capture failed"
             )
 
-        # STEP 8：继续正常 Agent 模型调用。
+        # STEP 10：继续正常 Agent 调用。
         return await handler(request)
 
     def wrap_model_call(
