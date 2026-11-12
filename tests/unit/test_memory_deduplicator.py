@@ -368,3 +368,171 @@ async def test_confirm_update_does_not_recreate_deleted_memory(
     )
 
     assert saved is None
+
+@pytest.mark.anyio
+async def test_confirm_update_with_matching_snapshot(
+    memory_system,
+) -> None:
+    """原始快照一致时，允许执行授权更新。"""
+
+    deduplicator, manager = memory_system
+
+    old_candidate = make_candidate(
+        "python_style",
+        "喜欢中文代码注释",
+    )
+
+    new_candidate = make_candidate(
+        "python_style",
+        "喜欢英文代码注释",
+    )
+
+    await deduplicator.process("user_001", old_candidate)
+
+    original = await manager.get_memory(
+        "user_001",
+        "python_style",
+    )
+
+    snapshot = {
+        field: original[field]
+        for field in (
+            "content",
+            "category",
+            "created_at",
+            "updated_at",
+        )
+    }
+
+    result = await deduplicator.confirm_update(
+        "user_001",
+        new_candidate,
+        expected_snapshot=snapshot,
+    )
+
+    assert result.status == "updated"
+
+    saved = await manager.get_memory(
+        "user_001",
+        "python_style",
+    )
+
+    assert saved["content"] == "喜欢英文代码注释"
+
+
+@pytest.mark.anyio
+async def test_confirm_update_rejects_stale_snapshot(
+    memory_system,
+) -> None:
+    """原始记忆发生变化后，拒绝使用过期快照覆盖。"""
+
+    deduplicator, manager = memory_system
+
+    old_candidate = make_candidate(
+        "python_style",
+        "喜欢中文代码注释",
+    )
+
+    new_candidate = make_candidate(
+        "python_style",
+        "喜欢英文代码注释",
+    )
+
+    await deduplicator.process("user_001", old_candidate)
+
+    original = await manager.get_memory(
+        "user_001",
+        "python_style",
+    )
+
+    snapshot = {
+        field: original[field]
+        for field in (
+            "content",
+            "category",
+            "created_at",
+            "updated_at",
+        )
+    }
+
+    # 模拟用户确认前，其他操作修改了原记忆。
+    await manager.update_memory(
+        "user_001",
+        "python_style",
+        content="喜欢简洁的中文代码注释",
+    )
+
+    result = await deduplicator.confirm_update(
+        "user_001",
+        new_candidate,
+        expected_snapshot=snapshot,
+    )
+
+    assert result.status == "conflict"
+
+    saved = await manager.get_memory(
+        "user_001",
+        "python_style",
+    )
+
+    # 必须保留其他操作已经修改的内容。
+    assert saved["content"] == "喜欢简洁的中文代码注释"
+
+
+@pytest.mark.anyio
+async def test_confirm_update_with_same_snapshot_is_idempotent(
+    memory_system,
+) -> None:
+    """同一授权重复执行，不应重复修改记忆。"""
+
+    deduplicator, manager = memory_system
+
+    old_candidate = make_candidate(
+        "python_style",
+        "喜欢中文代码注释",
+    )
+
+    new_candidate = make_candidate(
+        "python_style",
+        "喜欢英文代码注释",
+    )
+
+    await deduplicator.process("user_001", old_candidate)
+
+    original = await manager.get_memory(
+        "user_001",
+        "python_style",
+    )
+
+    snapshot = {
+        field: original[field]
+        for field in (
+            "content",
+            "category",
+            "created_at",
+            "updated_at",
+        )
+    }
+
+    first = await deduplicator.confirm_update(
+        "user_001",
+        new_candidate,
+        expected_snapshot=snapshot,
+    )
+
+    assert first.status == "updated"
+
+    second = await deduplicator.confirm_update(
+        "user_001",
+        new_candidate,
+        expected_snapshot=snapshot,
+    )
+
+    assert second.status == "unchanged"
+
+    saved = await manager.get_memory(
+        "user_001",
+        "python_style",
+    )
+
+    assert saved["content"] == "喜欢英文代码注释"
