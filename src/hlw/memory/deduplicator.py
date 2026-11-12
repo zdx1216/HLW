@@ -48,9 +48,6 @@ class MemoryDeduplicator:
         self,
         user_id: str,
         candidate: MemoryCandidate,
-        *,
-        update_confirmed: bool = False,
-        require_existing: bool = False,
     ) -> MemoryDeduplicationResult:
         """处理一条候选记忆。
 
@@ -62,13 +59,6 @@ class MemoryDeduplicator:
 
             candidate:
                 Extractor 提取并经过 Validator 校验的记忆。
-
-            update_confirmed:
-                是否已经明确确认更新旧记忆。
-
-            require_existing:
-                是否要求原有记忆必须存在。
-                用于防止确认更新时重新创建已经删除的记忆。
 
         Returns:
             MemoryDeduplicationResult:
@@ -84,8 +74,8 @@ class MemoryDeduplicator:
             return await self._process_locked(
                 user_id=user_id,
                 candidate=candidate,
-                update_confirmed=update_confirmed,
-                require_existing=require_existing,
+                update_confirmed=False,
+                require_existing=False,
                 expected_snapshot=None,
             )
 
@@ -233,12 +223,12 @@ class MemoryDeduplicator:
         )
 
     async def confirm_update(
-        self,
-        user_id: str,
-        candidate: MemoryCandidate,
-        *,
-        expected_snapshot: dict[str, str] | None = None,
-    ) -> MemoryDeduplicationResult:
+            self,
+            user_id: str,
+            candidate: MemoryCandidate,
+            *,
+            expected_snapshot: dict[str, str],
+        ) -> MemoryDeduplicationResult:
         """用户明确授权后，执行已有记忆的安全更新。
 
         自动启用：
@@ -261,10 +251,31 @@ class MemoryDeduplicator:
                 "candidate 必须是 MemoryCandidate 类型"
             )
 
-        # STEP 2：检查并规范化原始快照。
-        normalized_snapshot = None
+        # STEP 2：必须提供有效的原始记忆快照。
+        if not isinstance(expected_snapshot, dict):
+            raise TypeError(
+                "expected_snapshot 必须是字典"
+            )
 
-        if expected_snapshot is not None:
+        required_fields = (
+            "content",
+            "category",
+            "created_at",
+            "updated_at",
+        )
+
+        normalized_snapshot: dict[str, str] = {}
+
+        for field in required_fields:
+            value = expected_snapshot.get(field)
+
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"expected_snapshot.{field} 不能为空"
+                )
+
+            normalized_snapshot[field] = value.strip()
+
 
             if not isinstance(expected_snapshot, dict):
                 raise TypeError(

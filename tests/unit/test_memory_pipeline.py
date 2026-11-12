@@ -3,6 +3,7 @@
 import pytest
 from langgraph.store.memory import InMemoryStore
 
+from hlw.memory.confirmation_service import MemoryConfirmationService
 from hlw.memory.deduplicator import MemoryDeduplicator
 from hlw.memory.execution_locks import MemoryExecutionLocks
 from hlw.memory.extractor import MemoryExtractor
@@ -75,6 +76,51 @@ def build_pipeline(
     )
 
     return pipeline, manager
+
+def build_pending_confirmation_flow(
+    candidate: MemoryCandidate,
+) -> tuple[
+    MemoryPipeline,
+    MemoryConfirmationService,
+    MemoryManager,
+    PendingMemoryManager,
+]:
+    """构建 Pipeline 到确认服务的完整测试链路。"""
+
+    store = InMemoryStore()
+
+    manager = MemoryManager(store)
+    pending_manager = PendingMemoryManager(store)
+
+    # 两个服务必须共享同一套记忆锁。
+    execution_locks = MemoryExecutionLocks()
+
+    deduplicator = MemoryDeduplicator(
+        manager,
+        execution_locks,
+    )
+
+    pipeline = MemoryPipeline(
+        extractor=FakeMemoryExtractor(
+            MemoryExtractionResult(candidates=[candidate])
+        ),
+        validator=MemoryValidator(),
+        deduplicator=deduplicator,
+        pending_manager=pending_manager,
+    )
+
+    confirmation_service = MemoryConfirmationService(
+        pending_manager=pending_manager,
+        deduplicator=deduplicator,
+        execution_locks=execution_locks,
+    )
+
+    return (
+        pipeline,
+        confirmation_service,
+        manager,
+        pending_manager,
+    )
 
 
 @pytest.mark.anyio
@@ -193,69 +239,6 @@ async def test_pipeline_memory_conflict() -> None:
 
     assert saved is not None
     assert saved["content"] == "喜欢中文代码注释"
-
-
-@pytest.mark.anyio
-async def test_pipeline_confirm_update() -> None:
-    """用户授权后，Pipeline 应该成功更新已有记忆。"""
-
-    candidate = make_candidate(
-        content="喜欢简洁的英文代码注释",
-        evidence="简洁的英文代码注释",
-    )
-
-    pipeline, manager = build_pipeline(MemoryExtractionResult(candidates=[candidate]))
-
-    # 先保存旧记忆。
-    await manager.save_memory(
-        user_id="user_001",
-        key="coding_style",
-        content="喜欢详细的中文代码注释",
-        category="preference",
-    )
-
-    # 用户确认更新。
-    result = await pipeline.confirm_update(
-        user_id="user_001",
-        candidate=candidate,
-    )
-
-    assert result.status == "updated"
-
-    # 验证数据库中的内容确实改变。
-    saved = await manager.get_memory(
-        "user_001",
-        "coding_style",
-    )
-
-    assert saved is not None
-    assert saved["content"] == "喜欢简洁的英文代码注释"
-
-
-@pytest.mark.anyio
-async def test_pipeline_confirm_update_missing_memory() -> None:
-    """旧记忆不存在时，Pipeline 不应该重新创建。"""
-
-    candidate = make_candidate(
-        content="喜欢简洁的英文代码注释",
-        evidence="简洁的英文代码注释",
-    )
-
-    pipeline, manager = build_pipeline(MemoryExtractionResult(candidates=[candidate]))
-
-    result = await pipeline.confirm_update(
-        user_id="user_001",
-        candidate=candidate,
-    )
-
-    assert result.status == "conflict"
-
-    saved = await manager.get_memory(
-        "user_001",
-        "coding_style",
-    )
-
-    assert saved is None
 
 @pytest.mark.anyio
 async def test_pipeline_creates_pending_record_on_conflict() -> None:
@@ -388,3 +371,123 @@ async def test_pipeline_does_not_create_pending_for_new_memory() -> None:
 
     assert saved is not None
     assert saved["content"] == candidate.content
+
+@pytest.mark.anyio
+async def test_pipeline_confirm_through_pending_service() -> None:
+    """记忆冲突必须经过 Pending 和确认服务才能更新。"""
+
+    candidate = make_candidate(
+        content="喜欢英文代码注释",
+        evidence="英文代码注释",
+    )
+
+    (
+        pipeline,
+        confirmation_service,
+        manager,
+        pending_manager,
+    ) = build_pending_confirmation_flow(candidate)
+
+    # STEP 1：保存原有记忆。
+    await manager.save_memory(
+        user_id="user_001",
+        key="coding_style",
+        content="喜欢中文代码注释",
+        category="preference",
+    )
+
+    # STEP 2：用户提出新的记忆偏好。
+    result = await pipeline.run(
+        user_id="user_001",
+        user_message="以后请使用英文代码注释。",
+    )
+
+    assert result.deduplication_results[0].status == "conflict"
+    assert len(result.pending_updates) == 1
+
+    pending_id = result.pending_updates[0].pending_id
+
+    # STEP 3：尚未确认，正式记忆不能变化。
+    saved_before = await manager.get_memory(
+        "user_001",
+        "coding_style",
+    )
+
+    assert saved_before["content"] == "喜欢中文代码注释"
+
+    # STEP 4：使用 pending_id 完成确认。
+    confirmation = await confirmation_service.confirm(
+        user_id="user_001",
+        pending_id=pending_id,
+    )
+
+    assert confirmation.status == "confirmed"
+
+    # STEP 5：确认之后，正式记忆才更新。
+    saved_after = await manager.get_memory(
+        "user_001",
+        "coding_style",
+    )
+
+    assert saved_after["content"] == "喜欢英文代码注释"
+
+    # STEP 6：待确认记录应被消费。
+    assert await pending_manager.get_pending(
+        "user_001",
+        pending_id,
+    ) is None
+
+@pytest.mark.anyio
+async def test_pipeline_reject_through_pending_service() -> None:
+    """拒绝 Pending 更新时，原有记忆保持不变。"""
+
+    candidate = make_candidate(
+        content="喜欢英文代码注释",
+        evidence="英文代码注释",
+    )
+
+    (
+        pipeline,
+        confirmation_service,
+        manager,
+        pending_manager,
+    ) = build_pending_confirmation_flow(candidate)
+
+    await manager.save_memory(
+        user_id="user_001",
+        key="coding_style",
+        content="喜欢中文代码注释",
+        category="preference",
+    )
+
+    # STEP 1：触发记忆冲突。
+    result = await pipeline.run(
+        user_id="user_001",
+        user_message="以后请使用英文代码注释。",
+    )
+
+    assert len(result.pending_updates) == 1
+
+    pending_id = result.pending_updates[0].pending_id
+
+    # STEP 2：用户明确拒绝。
+    rejection = await confirmation_service.reject(
+        user_id="user_001",
+        pending_id=pending_id,
+    )
+
+    assert rejection.status == "rejected"
+
+    # STEP 3：原有正式记忆不能改变。
+    saved = await manager.get_memory(
+        "user_001",
+        "coding_style",
+    )
+
+    assert saved["content"] == "喜欢中文代码注释"
+
+    # STEP 4：待确认记录已删除。
+    assert await pending_manager.get_pending(
+        "user_001",
+        pending_id,
+    ) is None
