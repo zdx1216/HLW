@@ -12,10 +12,12 @@
 
 from hlw.memory.deduplicator import MemoryDeduplicator
 from hlw.memory.extractor import MemoryExtractor
+from hlw.memory.pending_manager import PendingMemoryManager
 from hlw.memory.schemas import (
     MemoryCandidate,
     MemoryDeduplicationResult,
     MemoryPipelineResult,
+    PendingMemoryReference,
 )
 from hlw.memory.validator import MemoryValidator
 
@@ -28,12 +30,19 @@ class MemoryPipeline:
         extractor: MemoryExtractor,
         validator: MemoryValidator,
         deduplicator: MemoryDeduplicator,
+        *,
+        pending_manager: PendingMemoryManager | None = None,
     ) -> None:
-        """通过依赖注入获得所需组件。"""
+        """通过依赖注入获得长期记忆处理组件。
+
+        pending_manager 可选，兼容已有 Pipeline 调用。
+        提供时，冲突会创建待确认记录。
+        """
 
         self._extractor = extractor
         self._validator = validator
         self._deduplicator = deduplicator
+        self._pending_manager = pending_manager
 
     async def run(
         self,
@@ -59,10 +68,11 @@ class MemoryPipeline:
             user_message,
         )
 
-        # STEP 5：逐条处理通过校验的候选记忆
+        # STEP 5：逐条处理已经通过验证的候选记忆。
         deduplication_results = []
-
+        pending_updates = []
         for candidate in validation.accepted:
+            # 5.1 判断新记忆、重复记忆或冲突记忆。
             result = await self._deduplicator.process(
                 user_id=user_id,
                 candidate=candidate,
@@ -70,12 +80,48 @@ class MemoryPipeline:
 
             deduplication_results.append(result)
 
-        # STEP 6：统一返回整个 Pipeline 的执行结果
+            # 5.2 没有配置 PendingManager 时，
+            # 保持原有 Pipeline 行为。
+            if self._pending_manager is None:
+                continue
+
+            # 5.3 只有冲突记忆需要用户确认。
+            if result.status != "conflict":
+                continue
+
+            # 5.4 冲突必须附带原始记忆快照。
+            # 快照缺失时拒绝创建待确认记录。
+            if result.existing_snapshot is None:
+                raise RuntimeError(
+                    "记忆冲突缺少原始快照，"
+                    "不能安全创建待确认记录"
+                )
+
+            # 5.5 保存待确认记录。
+            pending_record = (
+                await self._pending_manager.create_pending(
+                    user_id=user_id,
+                    candidate=candidate,
+                    existing_snapshot=result.existing_snapshot,
+                )
+            )
+
+            # 5.6 返回待确认记录的引用信息。
+            pending_updates.append(
+                PendingMemoryReference(
+                    pending_id=pending_record["pending_id"],
+                    key=candidate.key,
+                )
+            )
+
+        # STEP 6：返回流水线处理结果。
         return MemoryPipelineResult(
             extraction=extraction,
             validation=validation,
             deduplication_results=deduplication_results,
+            pending_updates=pending_updates,
         )
+
 
     async def confirm_update(
         self,

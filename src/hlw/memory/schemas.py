@@ -97,8 +97,17 @@ class MemoryDeduplicationResult(BaseModel):
     message: str
     # 如果存在旧记忆，记录其原始内容
     existing_content: str | None = None
+        # 发生冲突时保存原始记忆快照，供 PendingManager 使用。
+    existing_snapshot: dict[str, str] | None = None
 
 
+class PendingMemoryReference(BaseModel):
+    """流水线创建的待确认记忆引用。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pending_id: str
+    key: str
 class MemoryPipelineResult(BaseModel):
     """完整的长期记忆流水线执行结果。"""
 
@@ -112,3 +121,7 @@ class MemoryPipelineResult(BaseModel):
 
     # Deduplicator 对每条合格记忆的处理结果
     deduplication_results: list[MemoryDeduplicationResult] = Field(default_factory=list)
+    # 本次流水线创建的待确认记录。
+    pending_updates: list[PendingMemoryReference] = Field(
+        default_factory=list
+    )

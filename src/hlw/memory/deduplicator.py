@@ -184,12 +184,29 @@ class MemoryDeduplicator:
 
         # STEP 6：内容不同，但是没有明确更新授权。
         if not update_confirmed:
+
+            # 在持有记忆锁期间保存完整原始快照。
+            # 避免 Pipeline 发现冲突后再次读取数据库。
+            snapshot_fields = (
+                "content",
+                "category",
+                "created_at",
+                "updated_at",
+            )
+
+            existing_snapshot = {
+                field: existing[field]
+                for field in snapshot_fields
+            }
+
             return MemoryDeduplicationResult(
                 key=candidate.key,
                 status="conflict",
                 message="新旧记忆存在差异，等待明确更新确认",
                 existing_content=existing_content,
+                existing_snapshot=existing_snapshot,
             )
+
 
         # STEP 7：明确确认更新后，才修改已有记忆。
         updated = await self._manager.update_memory(

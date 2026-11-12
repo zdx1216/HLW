@@ -7,6 +7,7 @@ from hlw.memory.deduplicator import MemoryDeduplicator
 from hlw.memory.execution_locks import MemoryExecutionLocks
 from hlw.memory.extractor import MemoryExtractor
 from hlw.memory.manager import MemoryManager
+from hlw.memory.pending_manager import PendingMemoryManager
 from hlw.memory.pipeline import MemoryPipeline
 from hlw.memory.schemas import (
     MemoryCandidate,
@@ -255,3 +256,135 @@ async def test_pipeline_confirm_update_missing_memory() -> None:
     )
 
     assert saved is None
+
+@pytest.mark.anyio
+async def test_pipeline_creates_pending_record_on_conflict() -> None:
+    """新旧记忆冲突时自动创建待确认记录。"""
+
+    store = InMemoryStore()
+
+    manager = MemoryManager(store)
+    pending_manager = PendingMemoryManager(store)
+
+    deduplicator = MemoryDeduplicator(
+        manager,
+        MemoryExecutionLocks(),
+    )
+
+    candidate = make_candidate(
+        content="喜欢详细且规范的中文代码注释",
+        evidence="详细的中文代码注释",
+    )
+
+    pipeline = MemoryPipeline(
+        extractor=FakeMemoryExtractor(
+            MemoryExtractionResult(candidates=[candidate])
+        ),
+        validator=MemoryValidator(),
+        deduplicator=deduplicator,
+        pending_manager=pending_manager,
+    )
+
+    # 保存原有正式记忆。
+    await manager.save_memory(
+        user_id="user_001",
+        key="coding_style",
+        content="喜欢中文代码注释",
+        category="preference",
+    )
+
+    original = await manager.get_memory(
+        "user_001",
+        "coding_style",
+    )
+
+    # 提交新内容，触发冲突。
+    result = await pipeline.run(
+        user_id="user_001",
+        user_message="我喜欢详细的中文代码注释。",
+    )
+
+    assert result.deduplication_results[0].status == "conflict"
+
+    # 需要创建一条待确认记录。
+    assert len(result.pending_updates) == 1
+
+    reference = result.pending_updates[0]
+    assert reference.key == "coding_style"
+
+    pending = await pending_manager.get_pending(
+        "user_001",
+        reference.pending_id,
+    )
+
+    assert pending is not None
+    assert pending["status"] == "pending"
+    assert pending["candidate"] == candidate.model_dump(
+        mode="json"
+    )
+
+    # 待确认记录必须保存原始快照。
+    for field in (
+        "content",
+        "category",
+        "created_at",
+        "updated_at",
+    ):
+        assert pending["existing_snapshot"][field] == original[field]
+
+    # 创建待确认记录不能修改正式记忆。
+    saved = await manager.get_memory(
+        "user_001",
+        "coding_style",
+    )
+
+    assert saved == original
+
+
+@pytest.mark.anyio
+async def test_pipeline_does_not_create_pending_for_new_memory() -> None:
+    """首次发现的记忆直接保存，不创建待确认记录。"""
+
+    store = InMemoryStore()
+
+    manager = MemoryManager(store)
+    pending_manager = PendingMemoryManager(store)
+
+    deduplicator = MemoryDeduplicator(
+        manager,
+        MemoryExecutionLocks(),
+    )
+
+    candidate = make_candidate()
+
+    pipeline = MemoryPipeline(
+        extractor=FakeMemoryExtractor(
+            MemoryExtractionResult(candidates=[candidate])
+        ),
+        validator=MemoryValidator(),
+        deduplicator=deduplicator,
+        pending_manager=pending_manager,
+    )
+
+    result = await pipeline.run(
+        user_id="user_001",
+        user_message="以后请提供详细的中文代码注释。",
+    )
+
+    assert result.deduplication_results[0].status == "created"
+
+    # 新记忆不应生成待确认记录。
+    assert result.pending_updates == []
+
+    assert await pending_manager.list_pending(
+        "user_001"
+    ) == []
+
+    # 正式记忆应当保存成功。
+    saved = await manager.get_memory(
+        "user_001",
+        "coding_style",
+    )
+
+    assert saved is not None
+    assert saved["content"] == candidate.content

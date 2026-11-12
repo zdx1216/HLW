@@ -536,3 +536,54 @@ async def test_confirm_update_with_same_snapshot_is_idempotent(
     )
 
     assert saved["content"] == "喜欢英文代码注释"
+
+@pytest.mark.anyio
+async def test_conflict_returns_original_memory_snapshot(
+    memory_system,
+) -> None:
+    """发生冲突时，返回完整原始记忆快照。"""
+
+    deduplicator, manager = memory_system
+
+    old_candidate = make_candidate(
+        "python_style",
+        "喜欢中文代码注释",
+    )
+
+    new_candidate = make_candidate(
+        "python_style",
+        "喜欢英文代码注释",
+    )
+
+    # 第一次保存原始记忆。
+    await deduplicator.process(
+        "user_001",
+        old_candidate,
+    )
+
+    # 第二次提交不同内容，触发冲突。
+    result = await deduplicator.process(
+        "user_001",
+        new_candidate,
+    )
+
+    assert result.status == "conflict"
+
+    # 必须返回四个完整快照字段。
+    assert result.existing_snapshot is not None
+
+    saved = await manager.get_memory(
+        "user_001",
+        "python_style",
+    )
+
+    for field in (
+        "content",
+        "category",
+        "created_at",
+        "updated_at",
+    ):
+        assert result.existing_snapshot[field] == saved[field]
+
+    # 冲突不能覆盖旧记忆。
+    assert saved["content"] == "喜欢中文代码注释"
